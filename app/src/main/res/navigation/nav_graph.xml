@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/mapFragment">
+
+    <!-- startDestination indica ad Android quale schermata aprire all'avvio (la Mappa) -->
+
+    <fragment android:id="@+id/mapFragment" android:label="Mappa"
+        android:name="it.unibo.lam2026.parkmate.ui.MapFragment"/>
+
+    <fragment android:id="@+id/vehiclesFragment" android:label="Veicoli"
+        android:name="it.unibo.lam2026.parkmate.ui.VehiclesFragment"/>
+
+    <fragment android:id="@+id/historyFragment" android:label="Storico"
+        android:name="it.unibo.lam2026.parkmate.ui.HistoryFragment"/>
+
+    <fragment android:id="@+id/statsFragment" android:label="Statistiche"
+        android:name="it.unibo.lam2026.parkmate.ui.StatsFragment"/>
+</navigation>
