@@ -6,12 +6,12 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 // Diciamo a Room quali tabelle (entities) contiene questo database e la versione attuale
-@Database(entities = [Parcheggio::class], version = 2)
+@Database(entities = [Parcheggio::class, Veicolo::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     // Colleghiamo il nostro DAO
     abstract fun parcheggioDao(): ParcheggioDao
-
+    abstract fun veicoloDao(): VeicoloDao
     // Questo blocco garantisce che esista UNA SOLA istanza del database in tutta l'app
     companion object {
         @Volatile
@@ -31,5 +31,4 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
     }
-
 }
