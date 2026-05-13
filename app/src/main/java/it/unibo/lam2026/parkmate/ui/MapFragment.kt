@@ -18,7 +18,7 @@ import androidx.core.content.ContextCompat
 
 class MapFragment : Fragment() {
 
-    // 1. Setup del ViewBinding specifico per i Fragment (evita memory leaks)
+    // Setup del ViewBinding specifico per i Fragment (evita memory leaks)
     private var _binding: FragmentMapBinding? = null
     private val binding get() = _binding!!
     private lateinit var myLocationOverlay: MyLocationNewOverlay
@@ -41,7 +41,7 @@ class MapFragment : Fragment() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 2. Configurazione OsmDroid: va fatta PRIMA di creare l'interfaccia!
+        // Configurazione OsmDroid: va fatta PRIMA di creare l'interfaccia!
         // Nei Fragment, al posto di 'applicationContext' si usa 'requireContext()'
         Configuration.getInstance().load(
             requireContext(),
@@ -60,7 +60,7 @@ class MapFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        // 3. Ora che la view esiste, possiamo impostare la mappa
+        // Ora che la view esiste, possiamo impostare la mappa
         setupMap()
         // Invece di chiamare direttamente setupMyLocation(), controlliamo i permessi
         checkLocationPermissions()
@@ -68,27 +68,34 @@ class MapFragment : Fragment() {
         // Ascoltiamo il click sul nuovo bottone
         binding.btnParkHere.setOnClickListener {
 
-            // Proviamo a prendere la posizione esatta dal pallino blu del GPS
-            val currentGeoPoint = if (::myLocationOverlay.isInitialized && myLocationOverlay.myLocation != null) {
-                myLocationOverlay.myLocation
-            } else {
-                // Se il GPS non ha ancora agganciato il segnale o l'utente ha negato i permessi,
-                // prendiamo il centro esatto visualizzato sulla mappa in quel momento.
-                // Questo soddisfa anche il requisito di poter "aggiustare manualmente" la posizione!
-                binding.mapView.mapCenter as GeoPoint
-            }
+            // Creiamo un'istanza del BottomSheet che hai appena aggiunto al progetto
+            val bottomSheet = ParkBottomSheetFragment()
 
-            val lat = currentGeoPoint.latitude
-            val lon = currentGeoPoint.longitude
+            // Lo mostriamo usando il FragmentManager del Fragment "padre" (MapFragment)
+            // "ParkBottomSheet" è solo un'etichetta (tag) interna per il sistema
+            bottomSheet.show(parentFragmentManager, "ParkBottomSheet")
 
-            // Per ora mostriamo un semplice messaggio a schermo (Toast) per verificare che funzioni.
-            // Nello step successivo, qui apriremo un Dialog o un nuovo Fragment per far
-            // scegliere all'utente quale veicolo parcheggiare.
-            android.widget.Toast.makeText(
-                requireContext(),
-                "Inizio parcheggio a: Lat $lat, Lon $lon",
-                android.widget.Toast.LENGTH_LONG
-            ).show()
+//            // Proviamo a prendere la posizione esatta dal pallino blu del GPS
+//            val currentGeoPoint = if (::myLocationOverlay.isInitialized && myLocationOverlay.myLocation != null) {
+//                myLocationOverlay.myLocation
+//            } else {
+//                // Se il GPS non ha ancora agganciato il segnale o l'utente ha negato i permessi,
+//                // prendiamo il centro esatto visualizzato sulla mappa in quel momento.
+//                // Questo soddisfa anche il requisito di poter "aggiustare manualmente" la posizione!
+//                binding.mapView.mapCenter as GeoPoint
+//            }
+//
+//            val lat = currentGeoPoint.latitude
+//            val lon = currentGeoPoint.longitude
+//
+//            // Per ora mostriamo un semplice messaggio a schermo (Toast) per verificare che funzioni.
+//            // Nello step successivo, qui apriremo un Dialog o un nuovo Fragment per far
+//            // scegliere all'utente quale veicolo parcheggiare.
+//            android.widget.Toast.makeText(
+//                requireContext(),
+//                "Inizio parcheggio a: Lat $lat, Lon $lon",
+//                android.widget.Toast.LENGTH_LONG
+//            ).show()
         }
     }
 
@@ -133,7 +140,7 @@ class MapFragment : Fragment() {
 
         binding.mapView.overlays.add(myLocationOverlay)
     }
-    // 4. Gestione OBBLIGATORIA del ciclo di vita della mappa di OsmDroid
+    // Gestione OBBLIGATORIA del ciclo di vita della mappa di OsmDroid
     override fun onResume() {
         super.onResume()
         binding.mapView.onResume()
@@ -154,7 +161,7 @@ class MapFragment : Fragment() {
         }
     }
 
-    // 5. Pulizia della memoria quando il Fragment viene distrutto
+    // Pulizia della memoria quando il Fragment viene distrutto
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
