@@ -6,13 +6,16 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import androidx.fragment.app.viewModels
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import it.unibo.lam2026.parkmate.databinding.FragmentParkBottomSheetBinding
+import it.unibo.lam2026.parkmate.viewmodel.ParcheggioViewModel
 
 class ParkBottomSheetFragment : BottomSheetDialogFragment() {
 
     private var _binding: FragmentParkBottomSheetBinding? = null
     private val binding get() = _binding!!
+    private val viewModel: ParcheggioViewModel by viewModels()
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -62,14 +65,15 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
                 return@setOnClickListener // Stop execution here
             }
 
-            // Simulate saving the data (later we'll pass this to the ViewModel)
-            Toast.makeText(
-                requireContext(),
-                "Parcheggiato: $selectedVehicle - $parkingType",
-                Toast.LENGTH_LONG
-            ).show()
+            // Per ora usiamo coordinate fisse, nel prossimo step vedremo come farcele passare dalla Mappa
+            val latFinta = 44.4949
+            val lonFinta = 11.3426
 
-            // Close the BottomSheet
+            // Chiamiamo il ViewModel che farà partire la Coroutine in modo sicuro
+            viewModel.salvaParcheggio(selectedVehicle, parkingType, latFinta, lonFinta)
+
+            // Messaggio di successo e chiusura della tendina
+            Toast.makeText(requireContext(), "Parcheggio salvato nel Database!", Toast.LENGTH_SHORT).show()
             dismiss()
         }
     }

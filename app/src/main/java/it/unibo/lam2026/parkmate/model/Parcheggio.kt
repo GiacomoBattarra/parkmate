@@ -3,15 +3,22 @@ package it.unibo.lam2026.parkmate.model
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-// Diciamo a Room che questa è una tabella chiamata "tabella_parcheggi"
-@Entity(tableName = "tabella_parcheggi")
-data class Parcheggio(
-    // Ogni tabella ha bisogno di una chiave primaria unica!
-    @PrimaryKey
-    val id: String,
-    val nome: String,
-    val postiDisponibili: Int,
-    val tariffaOraria: Double,
+@Entity(tableName = "tabella_sessioni_parcheggio")
+data class SessioneParcheggio(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+
+    val veicoloNome: String,  // Colleghiamo il nome del veicolo
+    val tipoParcheggio: String, // "Libero", "Orario", "Fisso"
     val latitudine: Double,
-    val longitudine: Double
+    val longitudine: Double,
+    val startTimeStamp: Long, // Orario di inizio in millisecondi
+
+    // I campi con "?" sono opzionali, si riempiono solo se l'utente li inserisce o quando chiude il parcheggio
+    val endTimeStamp: Long? = null,
+    val costoTotale: Double? = null,
+    val nota: String? = null,
+    val fotoPath: String? = null, // Percorso del file immagine sul telefono
+
+    val isAttivo: Boolean = true // Di default, quando crei il record, il parcheggio è attivo
 )
