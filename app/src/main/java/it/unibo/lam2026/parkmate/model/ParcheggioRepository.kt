@@ -6,10 +6,10 @@ import kotlinx.coroutines.flow.Flow
 
 class ParcheggioRepository(private val dao: ParcheggioDao) {
 
+    // Dichiarati come Flow, devono corrispondere a quanto ritorna il DAO
     val parcheggiAttivi: Flow<List<SessioneParcheggio>> = dao.getParcheggiAttivi()
     val storicoParcheggi: Flow<List<SessioneParcheggio>> = dao.getStoricoParcheggi()
 
-    // Questa rimane suspend per il ViewModel, ma sposta il lavoro su IO internamente
     suspend fun inserisciParcheggio(sessione: SessioneParcheggio) {
         withContext(Dispatchers.IO) {
             dao.inserisciParcheggio(sessione)
