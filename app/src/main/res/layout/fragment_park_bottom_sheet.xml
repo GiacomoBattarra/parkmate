@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@drawable/rounded_bottom_sheet_bg"> <TextView
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Inizia Parcheggio"
+    android:textSize="20sp"
+    android:textStyle="bold"
+    android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Scegli il veicolo:" />
+
+    <Spinner
+        android:id="@+id/spinnerVehicles"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Tipo di sosta:" />
+
+    <RadioGroup
+        android:id="@+id/radioGroupParkType"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp">
+
+        <RadioButton
+            android:id="@+id/radioFree"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Libero (Nessun costo)" />
+
+        <RadioButton
+            android:id="@+id/radioHourly"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="A pagamento (Tariffa oraria)" />
+
+        <RadioButton
+            android:id="@+id/radioFixed"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Ticket a scadenza fissa" />
+
+    </RadioGroup>
+
+    <Button
+        android:id="@+id/btnConfirmPark"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Conferma e Parcheggia" />
+
+</LinearLayout>
