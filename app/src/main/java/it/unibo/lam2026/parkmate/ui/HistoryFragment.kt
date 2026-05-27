@@ -30,14 +30,19 @@ class HistoryFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // 1. Configuriamo come deve apparire la lista (layout lineare classico)
+        // 1. Configuriamo come deve apparire la lista
         binding.recyclerViewHistory.layoutManager = LinearLayoutManager(requireContext())
 
         // 2. Osserviamo il Database in modo reattivo
         viewModel.storicoParcheggi.observe(viewLifecycleOwner) { resParcheggi ->
-            // resParcheggi contiene la lista aggiornata dei risultati dal DB
-            // Creiamo un nuovo adapter con questi dati e lo assegniamo alla RecyclerView
-            val adapter = ParcheggiAdapter(resParcheggi)
+
+            // 3. Creiamo l'Adapter E passiamo la logica del click nel blocco di parentesi graffe!
+            val adapter = HistoryAdapter(resParcheggi) { sessioneDaChiudere ->
+
+                // Questa riga magica scatta solo quando premi "Termina Sosta"
+                viewModel.terminaParcheggio(sessioneDaChiudere.id)
+
+            }
             binding.recyclerViewHistory.adapter = adapter
         }
     }

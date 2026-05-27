@@ -10,7 +10,8 @@ import java.util.Date
 import java.util.Locale
 
 class HistoryAdapter(
-    private var storicoList: List<SessioneParcheggio>
+    private var storicoList: List<SessioneParcheggio>,
+    private val onTerminaClick: (SessioneParcheggio) -> Unit
 ) : RecyclerView.Adapter<HistoryAdapter.HistoryViewHolder>() {
 
     class HistoryViewHolder(val binding: ItemHistoryBinding) : RecyclerView.ViewHolder(binding.root)
@@ -31,13 +32,21 @@ class HistoryAdapter(
         val formattaData = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
         val dataInizio = formattaData.format(Date(sessione.startTimeStamp))
 
-        // CORRETTO: ho messo "if" al posto di "se", e aggiunto "!!" per dire a Kotlin che il dato non è nullo
-        val dataFine = if (sessione.endTimeStamp != null) {
-            formattaData.format(Date(sessione.endTimeStamp!!))
+        // Nuovo blocco: Mostriamo o nascondiamo il bottone in base allo stato del parcheggio
+        if (sessione.endTimeStamp == null || sessione.isAttivo) {
+            holder.binding.tvHistoryTime.text = "Orario: $dataInizio - In corso"
+            holder.binding.btnTerminaParcheggio.visibility = android.view.View.VISIBLE
         } else {
-            "In corso"
+            val dataFine = formattaData.format(java.util.Date(sessione.endTimeStamp!!))
+            holder.binding.tvHistoryTime.text = "Orario: $dataInizio - $dataFine"
+            holder.binding.btnTerminaParcheggio.visibility = android.view.View.GONE
         }
-        holder.binding.tvHistoryTime.text = "Orario: $dataInizio - $dataFine"
+
+        // Quando l'utente preme il bottone, lanciamo l'evento verso il Fragment
+        holder.binding.btnTerminaParcheggio.setOnClickListener {
+            onTerminaClick(sessione)
+        }
+
 
         holder.binding.tvHistoryLocation.text = "Coordinate: ${sessione.latitudine}, ${sessione.longitudine}"
 
