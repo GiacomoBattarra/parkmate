@@ -35,4 +35,19 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
 
         }
     }
+
+    // Funzione per terminare un parcheggio attivo
+    fun terminaParcheggio(sessionId: Long) {
+
+        // Calcoliamo il timestamp esatto di questo momento
+        val tempoDiFine = System.currentTimeMillis()
+
+        // Lanciamo la coroutine nel thread di background (Dispatchers.IO)
+        viewModelScope.launch(Dispatchers.IO) {
+
+            // Chiamiamo il metodo del DAO per aggiornare il record nel DB
+            dao.chiudiParcheggio(sessionId, tempoDiFine)
+
+        }
+    }
 }
