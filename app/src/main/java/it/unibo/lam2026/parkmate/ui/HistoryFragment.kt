@@ -36,13 +36,16 @@ class HistoryFragment : Fragment() {
         // 2. Osserviamo il Database in modo reattivo
         viewModel.storicoParcheggi.observe(viewLifecycleOwner) { resParcheggi ->
 
-            // 3. Creiamo l'Adapter E passiamo la logica del click nel blocco di parentesi graffe!
-            val adapter = HistoryAdapter(resParcheggi) { sessioneDaChiudere ->
-
-                // Questa riga magica scatta solo quando premi "Termina Sosta"
-                viewModel.terminaParcheggio(sessioneDaChiudere.id)
-
-            }
+            // 3. Creiamo l'Adapter e gli passiamo ENTRAMBE le azioni!
+            val adapter = HistoryAdapter(
+                storicoList = resParcheggi,
+                onTerminaClick = { sessioneDaChiudere ->
+                    viewModel.terminaParcheggio(sessioneDaChiudere.id)
+                },
+                onEliminaClick = { sessioneDaEliminare ->
+                    viewModel.cancellaParcheggio(sessioneDaEliminare.id)
+                }
+            )
             binding.recyclerViewHistory.adapter = adapter
         }
     }

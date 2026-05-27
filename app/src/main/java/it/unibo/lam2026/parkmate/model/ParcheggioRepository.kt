@@ -15,7 +15,11 @@ class ParcheggioRepository(private val dao: ParcheggioDao) {
             dao.inserisciParcheggio(sessione)
         }
     }
-
+    suspend fun eliminaParcheggio(sessionId: Long) {
+        withContext(Dispatchers.IO) {
+            dao.eliminaParcheggio(sessionId)
+        }
+    }
     suspend fun chiudiParcheggio(sessionId: Long, endTime: Long) {
         withContext(Dispatchers.IO) {
             dao.chiudiParcheggio(sessionId, endTime)

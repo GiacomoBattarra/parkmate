@@ -15,6 +15,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.viewModels
+import it.unibo.lam2026.parkmate.viewmodel.ParcheggioViewModel
 
 class MapFragment : Fragment() {
 
@@ -22,6 +24,7 @@ class MapFragment : Fragment() {
     private var _binding: FragmentMapBinding? = null
     private val binding get() = _binding!!
     private lateinit var myLocationOverlay: MyLocationNewOverlay
+    private val viewModel: ParcheggioViewModel by viewModels()
 
     // Questo oggetto gestisce la richiesta del permesso e la risposta dell'utente
     private val requestPermissionLauncher = registerForActivityResult(
@@ -60,37 +63,55 @@ class MapFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        // Ora che la view esiste, possiamo impostare la mappa
+
+        // 1. Ora che la view esiste, possiamo impostare la mappa
         setupMap()
-        // Invece di chiamare direttamente setupMyLocation(), controlliamo i permessi
+
+        // 2. Controlla i permessi e accende il GPS in modo sicuro
         checkLocationPermissions()
 
-        // Ascoltiamo il click sul nuovo bottone
+        // 3. Ascoltiamo il click sul bottone (versione aggiornata con le coordinate REALI!)
         binding.btnParkHere.setOnClickListener {
-
-            binding.btnParkHere.setOnClickListener {
-
-                // 1. Otteniamo le coordinate correnti
-                val currentGeoPoint = if (::myLocationOverlay.isInitialized && myLocationOverlay.myLocation != null) {
-                    myLocationOverlay.myLocation
-                } else {
-                    binding.mapView.mapCenter as GeoPoint
-                }
-
-                val latitudineRisultato = currentGeoPoint.latitude
-                val longitudineRisultato = currentGeoPoint.longitude
-
-                // 2. Prepariamo il BottomSheet e lo "zainetto" (Bundle)
-                val bottomSheet = ParkBottomSheetFragment()
-                val bundleDati = Bundle()
-                bundleDati.putDouble("LATITUDINE", latitudineRisultato)
-                bundleDati.putDouble("LONGITUDINE", longitudineRisultato)
-
-                // 3. Agganciamo lo zainetto al fragment prima di mostrarlo
-                bottomSheet.arguments = bundleDati
-
-                bottomSheet.show(parentFragmentManager, "ParkBottomSheet")
+            // Prendiamo la posizione esatta dal GPS o dal centro della mappa
+            val currentGeoPoint = if (::myLocationOverlay.isInitialized && myLocationOverlay.myLocation != null) {
+                myLocationOverlay.myLocation
+            } else {
+                binding.mapView.mapCenter as GeoPoint
             }
+
+            // Creiamo un'istanza del BottomSheet e lo "zainetto" (Bundle) con le coordinate
+            val bottomSheet = ParkBottomSheetFragment()
+            val bundleDati = Bundle()
+            bundleDati.putDouble("LATITUDINE", currentGeoPoint.latitude)
+            bundleDati.putDouble("LONGITUDINE", currentGeoPoint.longitude)
+            bottomSheet.arguments = bundleDati
+
+            bottomSheet.show(parentFragmentManager, "ParkBottomSheet")
+        }
+
+        // ---------------------------------------------------------
+        // 4. NUOVO CODICE: DISEGNAMO I MARKER DEI PARCHEGGI ATTIVI
+        // ---------------------------------------------------------
+        viewModel.parcheggiAttivi.observe(viewLifecycleOwner) { listaAttivi ->
+
+            // Pulizia selettiva dei vecchi marker (non tocca il GPS!)
+            binding.mapView.overlays.removeAll { it is org.osmdroid.views.overlay.Marker }
+
+            // Creiamo un marker per ogni parcheggio attivo
+            for (parcheggio in listaAttivi) {
+                val segnaposto = org.osmdroid.views.overlay.Marker(binding.mapView)
+                segnaposto.position = org.osmdroid.util.GeoPoint(parcheggio.latitudine, parcheggio.longitudine)
+
+                segnaposto.title = "🚗 ${parcheggio.veicoloNome}"
+                segnaposto.snippet = parcheggio.tipoParcheggio
+
+                segnaposto.setAnchor(org.osmdroid.views.overlay.Marker.ANCHOR_CENTER, org.osmdroid.views.overlay.Marker.ANCHOR_BOTTOM)
+
+                binding.mapView.overlays.add(segnaposto)
+            }
+
+            // Diciamo alla mappa di ridisegnarsi
+            binding.mapView.invalidate()
         }
     }
 

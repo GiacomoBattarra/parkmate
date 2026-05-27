@@ -27,4 +27,8 @@ interface ParcheggioDao {
     // 4. Aggiornamento (quando chiudi un parcheggio attivo)
     @Query("UPDATE tabella_sessioni_parcheggio SET isAttivo = 0, endTimeStamp = :endTime WHERE id = :sessionId")
     fun chiudiParcheggio(sessionId: Long, endTime: Long)
+
+    // 5. Eliminazione fisica dal database
+    @Query("DELETE FROM tabella_sessioni_parcheggio WHERE id = :sessionId")
+    fun eliminaParcheggio(sessionId: Long)
 }
