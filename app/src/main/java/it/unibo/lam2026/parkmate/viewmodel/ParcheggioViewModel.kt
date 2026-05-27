@@ -2,6 +2,7 @@ package it.unibo.lam2026.parkmate.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import it.unibo.lam2026.parkmate.model.AppDatabase
 import it.unibo.lam2026.parkmate.model.SessioneParcheggio
@@ -12,7 +13,7 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
 
     // Prendiamo il riferimento al DAO passando per il Database
     private val dao = AppDatabase.getDatabase(application).parcheggioDao()
-
+    val storicoParcheggi = dao.getStoricoParcheggi().asLiveData()
     // Questa NON è suspend, quindi puoi chiamarla dal bottone nel Fragment!
     fun salvaParcheggio(nomeVeicolo: String, tipo: String, lat: Double, lon: Double) {
 

@@ -65,15 +65,15 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
                 return@setOnClickListener // Stop execution here
             }
 
-            // Per ora usiamo coordinate fisse, nel prossimo step vedremo come farcele passare dalla Mappa
-            val latFinta = 44.4949
-            val lonFinta = 11.3426
+            // Estraiamo i dati dallo "zainetto" arguments.
+            // Se per caso non ci sono, usiamo 0.0 come fallback
+            val latReale = arguments?.getDouble("LATITUDINE") ?: 0.0
+            val lonReale = arguments?.getDouble("LONGITUDINE") ?: 0.0
 
-            // Chiamiamo il ViewModel che farà partire la Coroutine in modo sicuro
-            viewModel.salvaParcheggio(selectedVehicle, parkingType, latFinta, lonFinta)
+            // Chiamiamo il ViewModel usando finalmente le coordinate reali
+            viewModel.salvaParcheggio(selectedVehicle, parkingType, latReale, lonReale)
 
-            // Messaggio di successo e chiusura della tendina
-            Toast.makeText(requireContext(), "Parcheggio salvato nel Database!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "Parcheggio salvato a Lat: $latReale", Toast.LENGTH_SHORT).show()
             dismiss()
         }
     }

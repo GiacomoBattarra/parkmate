@@ -68,34 +68,29 @@ class MapFragment : Fragment() {
         // Ascoltiamo il click sul nuovo bottone
         binding.btnParkHere.setOnClickListener {
 
-            // Creiamo un'istanza del BottomSheet che hai appena aggiunto al progetto
-            val bottomSheet = ParkBottomSheetFragment()
+            binding.btnParkHere.setOnClickListener {
 
-            // Lo mostriamo usando il FragmentManager del Fragment "padre" (MapFragment)
-            // "ParkBottomSheet" è solo un'etichetta (tag) interna per il sistema
-            bottomSheet.show(parentFragmentManager, "ParkBottomSheet")
+                // 1. Otteniamo le coordinate correnti
+                val currentGeoPoint = if (::myLocationOverlay.isInitialized && myLocationOverlay.myLocation != null) {
+                    myLocationOverlay.myLocation
+                } else {
+                    binding.mapView.mapCenter as GeoPoint
+                }
 
-//            // Proviamo a prendere la posizione esatta dal pallino blu del GPS
-//            val currentGeoPoint = if (::myLocationOverlay.isInitialized && myLocationOverlay.myLocation != null) {
-//                myLocationOverlay.myLocation
-//            } else {
-//                // Se il GPS non ha ancora agganciato il segnale o l'utente ha negato i permessi,
-//                // prendiamo il centro esatto visualizzato sulla mappa in quel momento.
-//                // Questo soddisfa anche il requisito di poter "aggiustare manualmente" la posizione!
-//                binding.mapView.mapCenter as GeoPoint
-//            }
-//
-//            val lat = currentGeoPoint.latitude
-//            val lon = currentGeoPoint.longitude
-//
-//            // Per ora mostriamo un semplice messaggio a schermo (Toast) per verificare che funzioni.
-//            // Nello step successivo, qui apriremo un Dialog o un nuovo Fragment per far
-//            // scegliere all'utente quale veicolo parcheggiare.
-//            android.widget.Toast.makeText(
-//                requireContext(),
-//                "Inizio parcheggio a: Lat $lat, Lon $lon",
-//                android.widget.Toast.LENGTH_LONG
-//            ).show()
+                val latitudineRisultato = currentGeoPoint.latitude
+                val longitudineRisultato = currentGeoPoint.longitude
+
+                // 2. Prepariamo il BottomSheet e lo "zainetto" (Bundle)
+                val bottomSheet = ParkBottomSheetFragment()
+                val bundleDati = Bundle()
+                bundleDati.putDouble("LATITUDINE", latitudineRisultato)
+                bundleDati.putDouble("LONGITUDINE", longitudineRisultato)
+
+                // 3. Agganciamo lo zainetto al fragment prima di mostrarlo
+                bottomSheet.arguments = bundleDati
+
+                bottomSheet.show(parentFragmentManager, "ParkBottomSheet")
+            }
         }
     }
 
