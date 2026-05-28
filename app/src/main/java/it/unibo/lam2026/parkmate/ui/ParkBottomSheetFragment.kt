@@ -8,6 +8,12 @@ import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import android.location.Geocoder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Locale
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import it.unibo.lam2026.parkmate.databinding.FragmentParkBottomSheetBinding
 import it.unibo.lam2026.parkmate.model.AppDatabase
@@ -15,6 +21,7 @@ import it.unibo.lam2026.parkmate.model.VeicoloRepository
 import it.unibo.lam2026.parkmate.viewmodel.ParcheggioViewModel
 import it.unibo.lam2026.parkmate.viewmodel.VeicoliViewModel
 import it.unibo.lam2026.parkmate.viewmodel.VeicoliViewModelFactory
+
 
 class ParkBottomSheetFragment : BottomSheetDialogFragment() {
 
@@ -33,6 +40,35 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        // 1. Estraiamo SUBITO le coordinate
+        val latReale = arguments?.getDouble("LATITUDINE") ?: 0.0
+        val lonReale = arguments?.getDouble("LONGITUDINE") ?: 0.0
+
+        // 2. REVERSE GEOCODING (Traduzione Coordinate -> Indirizzo) in Background
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val geocoder = Geocoder(requireContext(), Locale.getDefault())
+                // Chiediamo ad Android di trovare massimo 1 indirizzo per queste coordinate
+                val indirizzi = geocoder.getFromLocation(latReale, lonReale, 1)
+
+                withContext(Dispatchers.Main) {
+                    if (!indirizzi.isNullOrEmpty()) {
+                        // Se lo trova, prendiamo la riga intera (es. "Via Roma 15, Bologna, Italia")
+                        val indirizzoTrovato = indirizzi[0].getAddressLine(0)
+                        binding.tvAddress.text = "📍 $indirizzoTrovato"
+                    } else {
+                        // Se non ci sono strade mappate in quel punto esatto
+                        binding.tvAddress.text = "📍 Indirizzo sconosciuto"
+                    }
+                }
+            } catch (e: Exception) {
+                // Se non c'è internet o il servizio fallisce, mostriamo le coordinate
+                withContext(Dispatchers.Main) {
+                    binding.tvAddress.text = "📍 Lat: $latReale, Lon: $lonReale"
+                }
+            }
+        }
 
         val dao = AppDatabase.getDatabase(requireContext()).veicoloDao()
         val repository = VeicoloRepository(dao)
@@ -102,9 +138,6 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
                 Toast.makeText(requireContext(), "Seleziona un tipo di sosta!", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-
-            val latReale = arguments?.getDouble("LATITUDINE") ?: 0.0
-            val lonReale = arguments?.getDouble("LONGITUDINE") ?: 0.0
 
             viewModel.salvaParcheggio(selectedVehicle, parkingType, latReale, lonReale)
 

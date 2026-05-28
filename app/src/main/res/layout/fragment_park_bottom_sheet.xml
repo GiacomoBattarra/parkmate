@@ -17,6 +17,17 @@
         android:layout_height="wrap_content"
         android:text="Scegli il veicolo:" />
 
+    <TextView
+        android:id="@+id/tvAddress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="16dp"
+        android:gravity="center"
+        android:text="📍 Cerco indirizzo..."
+        android:textStyle="italic"
+        android:textSize="16sp" />
+
     <Spinner
         android:id="@+id/spinnerVehicles"
         android:layout_width="match_parent"

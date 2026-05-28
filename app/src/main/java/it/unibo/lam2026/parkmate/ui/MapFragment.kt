@@ -18,7 +18,13 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.viewModels
 import it.unibo.lam2026.parkmate.viewmodel.ParcheggioViewModel
-
+import android.location.Geocoder
+import androidx.lifecycle.lifecycleScope
+import it.unibo.lam2026.parkmate.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Locale
 class MapFragment : Fragment() {
 
     // Setup del ViewBinding specifico per i Fragment (evita memory leaks)
@@ -114,28 +120,80 @@ class MapFragment : Fragment() {
             }
         }
 
-        // ---------------------------------------------------------
-        // 4. NUOVO CODICE: DISEGNAMO I MARKER DEI PARCHEGGI ATTIVI
-        // ---------------------------------------------------------
+        // 4. DISEGNAMO I MARKER DEI PARCHEGGI ATTIVI (Versione Definitiva con Bottone!)
         viewModel.parcheggiAttivi.observe(viewLifecycleOwner) { listaAttivi ->
 
-            // Pulizia selettiva dei vecchi marker (non tocca il GPS!)
             binding.mapView.overlays.removeAll { it is org.osmdroid.views.overlay.Marker }
 
-            // Creiamo un marker per ogni parcheggio attivo
             for (parcheggio in listaAttivi) {
                 val segnaposto = org.osmdroid.views.overlay.Marker(binding.mapView)
                 segnaposto.position = org.osmdroid.util.GeoPoint(parcheggio.latitudine, parcheggio.longitudine)
 
                 segnaposto.title = "🚗 ${parcheggio.veicoloNome}"
-                segnaposto.snippet = parcheggio.tipoParcheggio
+                java.lang.String.valueOf(parcheggio.tipoParcheggio).also { segnaposto.snippet = it }
+
+                // -----------------------------------------------------------------
+                // [NOVITÀ 1]: "Nascondiamo" l'ID del parcheggio dentro al marker!
+                // Ci servirà per sapere quale sessione chiudere al click del bottone
+                segnaposto.relatedObject = parcheggio.id
+
+                // [NOVITÀ 2]: Gli assegniamo il nostro fumetto personalizzato col bottone!
+                segnaposto.infoWindow = ParkInfoWindow(binding.mapView) { idSessione ->
+                    // Chiamiamo il viewModel per terminare la sosta!
+                    viewModel.terminaParcheggio(idSessione)
+                    android.widget.Toast.makeText(requireContext(), "Sosta terminata direttamente dalla mappa!", android.widget.Toast.LENGTH_SHORT).show()
+                }
+
+                segnaposto.setOnMarkerClickListener { marker, mapView ->
+                    if (marker.isInfoWindowOpen) {
+                        // Se è già aperto, il secondo click lo CHIUDE!
+                        marker.closeInfoWindow()
+                    } else {
+                        // Se è chiuso, prima chiudiamo eventuali altri fumetti aperti sulla mappa (per pulizia)...
+                        org.osmdroid.views.overlay.infowindow.InfoWindow.closeAllInfoWindowsOn(mapView)
+                        // ...e poi APRIAMO questo!
+                        marker.showInfoWindow()
+                    }
+                    true // Comunichiamo ad OSMDroid che abbiamo gestito il click noi manualmente
+                }
+
+                // Il Geocoder in background per la via (Versione Pulita: solo Via, Civico e Città)
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        val geocoder = Geocoder(requireContext(), Locale.getDefault())
+                        val indirizzi = geocoder.getFromLocation(parcheggio.latitudine, parcheggio.longitudine, 1)
+
+                        if (!indirizzi.isNullOrEmpty()) {
+                            val addr = indirizzi[0]
+
+                            // 1. Estraiamo singolarmente solo i pezzi che ci interessano!
+                            val via = addr.thoroughfare ?: ""      // Es. "Via Castiglione"
+                            val civico = addr.subThoroughfare ?: "" // Es. "89"
+                            val citta = addr.locality ?: ""        // Es. "Bologna"
+
+                            // 2. Assembliamo l'indirizzo in modo elegante ed escludiamo CAP e Nazione
+                            val indirizzoPulito = if (via.isNotEmpty() && citta.isNotEmpty()) {
+                                if (civico.isNotEmpty()) "$via $civico, $citta" else "$via, $citta"
+                            } else {
+                                // Fallback di sicurezza: se per qualche motivo i campi sopra sono vuoti, usa la riga intera
+                                addr.getAddressLine(0)
+                            }
+
+                            withContext(Dispatchers.Main) {
+                                segnaposto.snippet = "${parcheggio.tipoParcheggio}\n📍 $indirizzoPulito"
+                                if (segnaposto.isInfoWindowOpen) {
+                                    segnaposto.closeInfoWindow()
+                                    segnaposto.showInfoWindow()
+                                }
+                            }
+                        }
+                    } catch (e: Exception) { }
+                }
 
                 segnaposto.setAnchor(org.osmdroid.views.overlay.Marker.ANCHOR_CENTER, org.osmdroid.views.overlay.Marker.ANCHOR_BOTTOM)
-
                 binding.mapView.overlays.add(segnaposto)
             }
 
-            // Diciamo alla mappa di ridisegnarsi
             binding.mapView.invalidate()
         }
     }
@@ -206,5 +264,31 @@ class MapFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+    }
+}
+
+// Questa classe personalizza il comportamento della finestrella del Marker
+class ParkInfoWindow(mapView: org.osmdroid.views.MapView, private val onTerminaClick: (Long) -> Unit)
+    : org.osmdroid.views.overlay.infowindow.MarkerInfoWindow(R.layout.marker_info_window, mapView) {
+
+    override fun onOpen(item: Any?) {
+        val marker = item as? org.osmdroid.views.overlay.Marker ?: return
+
+        // Colleghiamo i testi usando i nuovi ID unici che OSMDroid non può intercettare!
+        val txtTitle = mView.findViewById<android.widget.TextView>(R.id.txtCustomTitle)
+        val txtDescription = mView.findViewById<android.widget.TextView>(R.id.txtCustomDescription)
+
+        // Scriviamo i dati reali nel fumetto
+        txtTitle?.text = marker.title
+        txtDescription?.text = marker.snippet
+
+        // Recuperiamo l'ID della sosta per il tasto Termina
+        val sessionId = marker.relatedObject as? Long ?: return
+
+        val btnTermina = mView.findViewById<android.widget.Button>(R.id.btnInfoWindowTermina)
+        btnTermina?.setOnClickListener {
+            onTerminaClick(sessionId)
+            close()
+        }
     }
 }
