@@ -1,5 +1,6 @@
 package it.unibo.lam2026.parkmate.model
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -20,5 +21,7 @@ data class SessioneParcheggio(
     val nota: String? = null,
     val fotoPath: String? = null, // Percorso del file immagine sul telefono
 
-    val isAttivo: Boolean = true // Di default, quando crei il record, il parcheggio è attivo
+    val isAttivo: Boolean = true, // Di default, quando crei il record, il parcheggio è attivo
+
+    @ColumnInfo(name = "archiviato") val archiviato: Boolean = false
 )

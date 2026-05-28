@@ -41,7 +41,7 @@ class StatsFragment : Fragment() {
         binding.spinnerTimeFilter.adapter = adapterSpinner
 
         // Ascolta il database dei parcheggi
-        viewModel.storicoParcheggi.observe(viewLifecycleOwner) { listaParcheggi ->
+        viewModel.statisticheGlobaliParcheggi.observe(viewLifecycleOwner) { listaParcheggi ->
             if (listaParcheggi != null) {
                 listaCompletaParcheggi = listaParcheggi
                 aggiornaStatistiche(binding.spinnerTimeFilter.selectedItemPosition)
@@ -73,25 +73,23 @@ class StatsFragment : Fragment() {
             else -> 0L
         }
 
-        // -------------------------------------------------------------------------
-        // SALVAVITA ANTI-ERRORE: Mostriamo tutta la lista per far compilare subito l'app.
-        val listaFiltrata = listaCompletaParcheggi
-
-        // NOTA PER IL FUTURO: Se nella classe SessioneParcheggio avete un campo data (es. timestamp o dataInizio),
-        // cancella la riga sopra ("val listaFiltrata = ...") e togli il commento /* */ al blocco qui sotto,
-        // modificando la parola 'timestamp' col nome reale del vostro campo.
-        /*
-        val listaFiltrata = listaCompletaParcheggi.filter { it.timestamp >= timestampLimite }
-        */
-        // -------------------------------------------------------------------------
+        // Mostriamo tutta la lista per far compilare subito l'app.
+        val listaFiltrata = listaCompletaParcheggi.filter { it.startTimeStamp >= timestampLimite }
 
         if (listaFiltrata.isEmpty()) {
             svuotaGrafica()
             return
         }
 
-        // --- CALCOLO 1: TOTALE PARCHEGGI ---
-        binding.tvTotalParkings.text = listaFiltrata.size.toString()
+        // --- CALCOLO 1: TOTALE PARCHEGGI (Assoluti vs Storico) ---
+        val totaliAssoluti = listaFiltrata.size // Conta TUTTI i parcheggi nel database
+
+        // Conta solo quelli dove archiviato è uguale a false (quindi ancora vivi nello storico)
+        val visibiliInStorico = listaFiltrata.count { !it.archiviato }
+
+        // Stampiamo i due testi separati nelle rispettive TextView
+        binding.tvTotalParkings.text = "Eseguiti in totale: $totaliAssoluti"
+        binding.tvHistoryParkings.text = "Visibili nello storico: $visibiliInStorico"
 
         // --- CALCOLO 2: VEICOLO PREFERITO (CON GESTIONE PARI MERITO) ---
         val raggruppatoVeicoli = listaFiltrata.groupBy { it.veicoloNome }
@@ -115,7 +113,7 @@ class StatsFragment : Fragment() {
     }
 
     private fun svuotaGrafica() {
-        binding.tvTotalParkings.text = "0"
+        binding.tvHistoryParkings.text = "Visibili nello storico: 0"
         binding.tvMostUsedVehicle.text = "Nessun dato"
         binding.tvMostFrequentType.text = "Nessun dato"
     }

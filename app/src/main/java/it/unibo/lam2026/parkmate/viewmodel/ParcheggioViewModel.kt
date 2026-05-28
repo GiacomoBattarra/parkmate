@@ -8,17 +8,22 @@ import it.unibo.lam2026.parkmate.model.AppDatabase
 import it.unibo.lam2026.parkmate.model.SessioneParcheggio
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class ParcheggioViewModel(application: Application) : AndroidViewModel(application) {
 
     // Prendiamo il riferimento al DAO passando per il Database
     private val dao = AppDatabase.getDatabase(application).parcheggioDao()
+
+    // Lo storico mostrerà solo i parcheggi attivi (grazie alla modifica al DAO con archiviato = 0)
     val storicoParcheggi = dao.getStoricoParcheggi().asLiveData()
+
     // Espone i parcheggi attivi alla Mappa in modo reattivo
     val parcheggiAttivi = dao.getParcheggiAttivi().asLiveData()
-    fun salvaParcheggio(nomeVeicolo: String, tipo: String, lat: Double, lon: Double) {
 
+    // [NUOVO]: Espone TUTTI i parcheggi (anche quelli nascosti/archiviato = 1) alla schermata delle Statistiche
+    val statisticheGlobaliParcheggi = dao.getTuttiIParcheggiPerStats().asLiveData()
+
+    fun salvaParcheggio(nomeVeicolo: String, tipo: String, lat: Double, lon: Double) {
         // Creiamo l'oggetto da salvare
         val nuovaSessione = SessioneParcheggio(
             veicoloNome = nomeVeicolo,
@@ -28,39 +33,26 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
             startTimeStamp = System.currentTimeMillis() // Prende l'ora attuale esatta
         )
 
-        // ECCO LA MAGIA: viewModelScope.launch apre un thread in background (Dispatchers.IO)
-        // Tutto quello che c'è qui dentro non blocca l'app!
+        // viewModelScope.launch apre un thread in background (Dispatchers.IO)
         viewModelScope.launch(Dispatchers.IO) {
-
-            // Qui DENTRO possiamo chiamare tranquillamente la funzione suspend!
             dao.inserisciParcheggio(nuovaSessione)
-
         }
     }
 
     // Funzione per terminare un parcheggio attivo
     fun terminaParcheggio(sessionId: Long) {
-
-        // Calcoliamo il timestamp esatto di questo momento
         val tempoDiFine = System.currentTimeMillis()
 
-        // Lanciamo la coroutine nel thread di background (Dispatchers.IO)
         viewModelScope.launch(Dispatchers.IO) {
-
-            // Chiamiamo il metodo del DAO per aggiornare il record nel DB
             dao.chiudiParcheggio(sessionId, tempoDiFine)
-
         }
     }
 
+    // Il tasto cancella dello storico ora non elimina più fisicamente dal DB,
+    // ma chiama "archiviaParcheggio" per nasconderlo dallo storico ma mantenerlo nelle statistiche!
     fun cancellaParcheggio(sessionId: Long) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            dao.eliminaParcheggio(sessionId)
-        }
-    }
-    suspend fun eliminaParcheggio(sessionId: Long) {
-        withContext(Dispatchers.IO) {
-            dao.eliminaParcheggio(sessionId)
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.archiviaParcheggio(sessionId)
         }
     }
 }

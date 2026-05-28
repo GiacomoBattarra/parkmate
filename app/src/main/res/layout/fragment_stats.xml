@@ -42,16 +42,27 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Parcheggi Totali effettuati"
+                    android:text="Riepilogo Soste"
                     android:textColor="#777777"
                     android:textSize="14sp" />
+
                 <TextView
                     android:id="@+id/tvTotalParkings"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="0"
+                    android:text="Eseguiti in totale: 0"
                     android:textColor="@color/design_default_color_primary"
-                    android:textSize="36sp"
+                    android:textSize="26sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="4dp"/>
+
+                <TextView
+                    android:id="@+id/tvHistoryParkings"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Visibili nello storico: 0"
+                    android:textColor="#4CAF50"
+                    android:textSize="18sp"
                     android:textStyle="bold"
                     android:layout_marginTop="4dp"/>
             </LinearLayout>
