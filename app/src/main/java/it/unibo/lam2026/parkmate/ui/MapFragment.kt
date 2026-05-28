@@ -14,6 +14,7 @@ import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import androidx.activity.result.contract.ActivityResultContracts
 import android.Manifest
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.viewModels
 import it.unibo.lam2026.parkmate.viewmodel.ParcheggioViewModel
@@ -24,6 +25,7 @@ class MapFragment : Fragment() {
     private var _binding: FragmentMapBinding? = null
     private val binding get() = _binding!!
     private lateinit var myLocationOverlay: MyLocationNewOverlay
+    private var isSelectingLocation = false
     private val viewModel: ParcheggioViewModel by viewModels()
 
     // Questo oggetto gestisce la richiesta del permesso e la risposta dell'utente
@@ -70,23 +72,46 @@ class MapFragment : Fragment() {
         // 2. Controlla i permessi e accende il GPS in modo sicuro
         checkLocationPermissions()
 
-        // 3. Ascoltiamo il click sul bottone (versione aggiornata con le coordinate REALI!)
+        // 3. Ascoltiamo il click sul bottone (Modalità Dinamica)
         binding.btnParkHere.setOnClickListener {
-            // Prendiamo la posizione esatta dal GPS o dal centro della mappa
-            val currentGeoPoint = if (::myLocationOverlay.isInitialized && myLocationOverlay.myLocation != null) {
-                myLocationOverlay.myLocation
+
+            if (!isSelectingLocation) {
+                // FASE A: Entriamo in modalità "Scegli Posizione"
+                isSelectingLocation = true
+
+                // Mostriamo il pin rosso al centro
+                binding.imgCenterPin.visibility = View.VISIBLE
+
+                // Cambiamo l'icona del bottone per far capire che ora serve a confermare (es. un floppy di salvataggio o check)
+                binding.btnParkHere.setImageResource(android.R.drawable.ic_menu_save)
+
+                // Piccolo avviso all'utente
+                Toast.makeText(requireContext(), "Sposta la mappa e conferma la posizione", Toast.LENGTH_SHORT).show()
+
+                // (Opzionale ma utile) Fermiamo l'inseguimento automatico del GPS per far scorrere la mappa liberamente
+                if (::myLocationOverlay.isInitialized) {
+                    myLocationOverlay.disableFollowLocation()
+                }
+
             } else {
-                binding.mapView.mapCenter as GeoPoint
+                // FASE B: L'utente ha spostato la mappa e preme per Confermare!
+
+                // 1. Catturiamo il centro esatto del mirino
+                val centerPoint = binding.mapView.mapCenter as GeoPoint
+
+                // 2. Passiamo i dati al BottomSheet e lo apriamo
+                val bottomSheet = ParkBottomSheetFragment()
+                val bundleDati = Bundle()
+                bundleDati.putDouble("LATITUDINE", centerPoint.latitude)
+                bundleDati.putDouble("LONGITUDINE", centerPoint.longitude)
+                bottomSheet.arguments = bundleDati
+                bottomSheet.show(parentFragmentManager, "ParkBottomSheet")
+
+                // 3. Riportiamo l'interfaccia allo "Stato Normale" per la prossima volta
+                isSelectingLocation = false
+                binding.imgCenterPin.visibility = View.GONE
+                binding.btnParkHere.setImageResource(android.R.drawable.ic_menu_mylocation)
             }
-
-            // Creiamo un'istanza del BottomSheet e lo "zainetto" (Bundle) con le coordinate
-            val bottomSheet = ParkBottomSheetFragment()
-            val bundleDati = Bundle()
-            bundleDati.putDouble("LATITUDINE", currentGeoPoint.latitude)
-            bundleDati.putDouble("LONGITUDINE", currentGeoPoint.longitude)
-            bottomSheet.arguments = bundleDati
-
-            bottomSheet.show(parentFragmentManager, "ParkBottomSheet")
         }
 
         // ---------------------------------------------------------
