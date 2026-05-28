@@ -61,6 +61,7 @@ class VehiclesFragment : Fragment() {
 
         // 6. Diciamo al ViewModel di caricare i dati la prima volta
         viewModel.caricaVeicoli()
+
     }
     private fun mostraDialogAggiuntaVeicolo() {
         // 1. Carichiamo (inflate) il layout XML che abbiamo appena creato
