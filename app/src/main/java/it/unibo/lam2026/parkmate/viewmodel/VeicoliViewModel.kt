@@ -31,6 +31,13 @@ class VeicoliViewModel(private val repository: VeicoloRepository) : ViewModel() 
         }
     }
 
+    fun aggiornaVeicolo(veicoloModificato: Veicolo) {
+        viewModelScope.launch {
+            repository.aggiornaVeicolo(veicoloModificato)
+            caricaVeicoli() // Ricarica la lista dopo la modifica
+        }
+    }
+
     fun rimuoviVeicolo(id: Long) {
         viewModelScope.launch {
             repository.eliminaVeicolo(id)

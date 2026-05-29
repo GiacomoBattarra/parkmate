@@ -19,6 +19,12 @@ class VeicoloRepository(private val dao: VeicoloDao) {
         }
     }
 
+    suspend fun aggiornaVeicolo(veicolo: Veicolo) {
+        withContext(Dispatchers.IO) {
+            dao.aggiornaVeicolo(veicolo)
+        }
+    }
+
     suspend fun eliminaVeicolo(veicoloId: Long) {
         // Forza l'eliminazione sul thread sicuro[cite: 2]
         withContext(Dispatchers.IO) {
