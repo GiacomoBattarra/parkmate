@@ -32,8 +32,8 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
     // [NUOVO]: Espone TUTTI i parcheggi (anche quelli nascosti/archiviato = 1) alla schermata delle Statistiche
     val statisticheGlobaliParcheggi = dao.getTuttiIParcheggiPerStats().asLiveData()
 
-    fun salvaParcheggio(nomeVeicolo: String, tipo: String, lat: Double, lon: Double, tariffa: Double = 0.0, scadenzaTimestamp: Long? = null) {
-        // Creiamo l'oggetto da salvare
+    fun salvaParcheggio(nomeVeicolo: String, tipo: String, lat: Double, lon: Double, tariffa: Double = 0.0, scadenzaTimestamp: Long? = null, nota: String? = null, fotoPath: String? = null) {
+        // 1. Creiamo l'oggetto da salvare
         val nuovaSessione = SessioneParcheggio(
             veicoloNome = nomeVeicolo,
             tipoParcheggio = tipo,
@@ -41,30 +41,28 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
             longitudine = lon,
             startTimeStamp = System.currentTimeMillis(),
             tariffa = tariffa,
-            scadenzaTimestamp = scadenzaTimestamp
+            scadenzaTimestamp = scadenzaTimestamp,
+            nota = nota,
+            fotoPath = fotoPath
         )
 
-        // Salviamo nel database
+        // 2. Salviamo nel database
         viewModelScope.launch(Dispatchers.IO) {
             dao.inserisciParcheggio(nuovaSessione)
         }
 
-        // --- [NUOVO]: LA MAGIA DELLE NOTIFICHE! ---
-        // Se la sosta ha una scadenza (è un ticket fisso), impostiamo l'allarme di sistema
+        // 3. Impostiamo l'allarme se c'è una scadenza
         if (scadenzaTimestamp != null) {
             impostaAllarmeScadenza(nomeVeicolo, scadenzaTimestamp)
         }
 
-        // --- [NUOVO]: WORKMANAGER PER SOSTA A CONSUMO ---
+        // 4. Avviamo il worker se è a pagamento orario
         if (tipo.contains("Orario")) {
-            // Selezioniamo 15 minuti, l'intervallo minimo consentito da Android
-            val workRequest = PeriodicWorkRequestBuilder<ParkingSessionWorker>(15, TimeUnit.MINUTES)
-                .addTag("SESSION_${nuovaSessione.veicoloNome}") // Gli diamo una targa unica per poterlo fermare dopo
+            val workRequest = androidx.work.PeriodicWorkRequestBuilder<it.unibo.lam2026.parkmate.utils.ParkingSessionWorker>(15, java.util.concurrent.TimeUnit.MINUTES)
+                .addTag("SESSION_${nuovaSessione.veicoloNome}")
                 .build()
 
-            // Inseriamo il lavoratore nella coda di sistema
-            WorkManager.getInstance(getApplication()).enqueue(workRequest)
-
+            androidx.work.WorkManager.getInstance(getApplication()).enqueue(workRequest)
         }
     }
 
