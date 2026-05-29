@@ -67,11 +67,35 @@ class StatsFragment : Fragment() {
         viewModel.statisticheGlobaliParcheggi.observe(viewLifecycleOwner) { listaParcheggi ->
             if (listaParcheggi != null) {
                 listaCompletaParcheggi = listaParcheggi
-                // 1. Aggiorna i testi
                 aggiornaStatistiche(binding.spinnerTimeFilter.selectedItemPosition)
-                // 2. Disegna il grafico a barre e heatmap
-                impostaGrafico(listaParcheggi)
-                disegnaHeatmap(listaParcheggi)
+
+                // 1. Estraiamo i nomi unici dei veicoli (es. se hai parcheggiato 10 volte la Panda, "Panda" apparirà una volta sola)
+                val nomiVeicoli = mutableListOf("Tutti i veicoli")
+                nomiVeicoli.addAll(listaParcheggi.map { it.veicoloNome }.distinct())
+
+                // 2. Riempiamo lo Spinner con i nomi
+                val spinnerAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, nomiVeicoli)
+                binding.spinnerVehicleFilter.adapter = spinnerAdapter
+
+                // 3. Quando l'utente seleziona un veicolo dal menu a tendina...
+                binding.spinnerVehicleFilter.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                    override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                        val veicoloScelto = nomiVeicoli[position]
+
+                        // Creiamo una nuova lista tenendo solo i parcheggi del veicolo scelto
+                        val listaFiltrata = if (veicoloScelto == "Tutti i veicoli") {
+                            listaCompletaParcheggi
+                        } else {
+                            listaCompletaParcheggi.filter { it.veicoloNome == veicoloScelto }
+                        }
+
+                        // LA MAGIA: Aggiorniamo contemporaneamente Grafico e Mappa solo con i dati filtrati!
+                        impostaGrafico(listaFiltrata)
+                        disegnaHeatmap(listaFiltrata)
+                    }
+
+                    override fun onNothingSelected(parent: AdapterView<*>?) {}
+                }
             }
         }
 
