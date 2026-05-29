@@ -65,4 +65,7 @@ dependencies {
 
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
+    // Libreria per i grafici
+    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
+
 }

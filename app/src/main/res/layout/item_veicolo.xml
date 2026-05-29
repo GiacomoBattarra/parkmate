@@ -46,6 +46,13 @@
                 android:textSize="14sp" />
         </LinearLayout>
 
+        <ImageButton
+            android:id="@+id/btnModificaVeicolo"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_edit" />
+
         <!-- Bottone Cestino per eliminare il veicolo -->
         <ImageButton
             android:id="@+id/btnEliminaVeicolo"
