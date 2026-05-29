@@ -90,6 +90,37 @@
         <EditText android:id="@+id/etFixedDuration" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" android:hint="Es. 120"/>
     </LinearLayout>
 
+    <EditText
+        android:id="@+id/etNotaParcheggio"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Aggiungi una nota (es. Pilastro B4)"
+        android:inputType="textCapSentences"
+        android:layout_marginBottom="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+
+        <Button
+            android:id="@+id/btnScattaFoto"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📷 Scatta Foto"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+
+        <ImageView
+            android:id="@+id/imgAnteprimaFoto"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="16dp"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
+    </LinearLayout>
+
     <Button
         android:id="@+id/btnConfirmPark"
         android:layout_width="match_parent"

@@ -30,7 +30,21 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
 
     // CAMBIO IMPORTANTE: Usiamo activityViewModels così Mappa e BottomSheet comunicano istantaneamente
     private val viewModel: ParcheggioViewModel by activityViewModels()
+    // --- VARIABILI PER LA FOTO ---
+    private var fotoUri: android.net.Uri? = null
+    private var percorsoFotoAssoluto: String? = null
 
+    // Preparo il "Lanciatore" che aspetta il risultato della fotocamera
+    private val scattaFotoLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.TakePicture()) { successo ->
+        if (successo) {
+            // La foto è stata scattata! Mostriamo l'anteprima nel quadratino
+            binding.imgAnteprimaFoto.setImageURI(fotoUri)
+            binding.imgAnteprimaFoto.visibility = View.VISIBLE
+        } else {
+            // L'utente ha chiuso la fotocamera senza scattare
+            percorsoFotoAssoluto = null
+        }
+    }
     private lateinit var veicoliViewModel: VeicoliViewModel
 
     override fun onCreateView(
@@ -168,6 +182,9 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
                 }
             }
 
+            // [NUOVO] Leggiamo la nota scritta dall'utente (se c'è)
+            val notaInserita = binding.etNotaParcheggio.text.toString().takeIf { it.isNotBlank() }
+
             // Chiamata finale al ViewModel con i NUOVI parametri
             viewModel.salvaParcheggio(
                 nomeVeicolo = selectedVehicle,
@@ -175,16 +192,57 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
                 lat = latReale,
                 lon = lonReale,
                 tariffa = tariffaFinale,
-                scadenzaTimestamp = scadenzaStimata
+                scadenzaTimestamp = scadenzaStimata,
+                nota = notaInserita,              // <--- AGGIUNTO
+                fotoPath = percorsoFotoAssoluto   // <--- AGGIUNTO
             )
 
             Toast.makeText(requireContext(), "Parcheggio iniziato!", Toast.LENGTH_SHORT).show()
             dismiss()
+        }
+
+        // --- CLICK SUL BOTTONE FOTOCAMERA ---
+        binding.btnScattaFoto.setOnClickListener {
+            try {
+                // 1. Creiamo il file vuoto
+                val fileFoto = creaFileImmagine()
+
+                // 2. Generiamo l'URI sicuro tramite il FileProvider (DEVE combaciare con il Manifest)
+                fotoUri = androidx.core.content.FileProvider.getUriForFile(
+                    requireContext(),
+                    "${requireContext().packageName}.fileprovider",
+                    fileFoto
+                )
+
+                // 3. Lanciamo la fotocamera passandole l'URI sicuro!
+                scattaFotoLauncher.launch(fotoUri)
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                android.widget.Toast.makeText(requireContext(), "Errore nell'apertura della fotocamera", android.widget.Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+    }
+
+    private fun creaFileImmagine(): java.io.File {
+        // Creiamo un nome unico basato sulla data e ora attuale
+        val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())
+        val nomeFile = "JPEG_${timeStamp}_"
+
+        // Usiamo la cartella Cache sicura (quella che abbiamo autorizzato nel file_paths.xml)
+        val cartellaStorage = requireContext().externalCacheDir
+
+        // Creiamo il file fisico
+        val fileImmagine = java.io.File.createTempFile(nomeFile, ".jpg", cartellaStorage)
+
+        // Salviamo il percorso assoluto da mandare al Database!
+        percorsoFotoAssoluto = fileImmagine.absolutePath
+
+        return fileImmagine
     }
 }
