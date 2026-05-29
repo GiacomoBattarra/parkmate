@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 // 1. MODIFICA QUI: Abbiamo sostituito Parcheggio::class con SessioneParcheggio::class
 // e aumentato la versione a 4
-@Database(entities = [SessioneParcheggio::class, Veicolo::class], version = 5, exportSchema = false)
+@Database(entities = [SessioneParcheggio::class, Veicolo::class], version = 6, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     // Colleghiamo i nostri DAO

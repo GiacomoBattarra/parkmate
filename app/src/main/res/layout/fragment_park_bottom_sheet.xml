@@ -4,13 +4,15 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:padding="24dp"
-    android:background="@drawable/rounded_bottom_sheet_bg"> <TextView
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:text="Inizia Parcheggio"
-    android:textSize="20sp"
-    android:textStyle="bold"
-    android:layout_marginBottom="16dp"/>
+    android:background="@drawable/rounded_bottom_sheet_bg">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Inizia Parcheggio"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp"/>
 
     <TextView
         android:layout_width="wrap_content"
@@ -43,27 +45,50 @@
         android:id="@+id/radioGroupParkType"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="24dp">
+        android:layout_marginBottom="16dp">
 
         <RadioButton
             android:id="@+id/radioFree"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Libero (Nessun costo)" />
-
-        <RadioButton
-            android:id="@+id/radioHourly"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="A pagamento (Tariffa oraria)" />
+            android:text="Libero (Nessun costo)"
+            android:checked="true"/> <RadioButton
+        android:id="@+id/radioHourly"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="A pagamento (Tariffa oraria)" />
 
         <RadioButton
             android:id="@+id/radioFixed"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Ticket a scadenza fissa" />
-
     </RadioGroup>
+
+    <LinearLayout
+        android:id="@+id/layoutHourly"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:layout_marginBottom="16dp">
+        <TextView android:text="Tariffa oraria (€/h):" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <EditText android:id="@+id/etHourlyTariff" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="numberDecimal" android:hint="Es. 1.50"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/layoutFixed"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:layout_marginBottom="16dp">
+        <TextView android:text="Costo totale ticket (€):" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <EditText android:id="@+id/etFixedCost" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="numberDecimal" android:hint="Es. 5.00"/>
+
+        <TextView android:text="Durata sosta (minuti):" android:layout_marginTop="8dp" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <EditText android:id="@+id/etFixedDuration" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" android:hint="Es. 120"/>
+    </LinearLayout>
 
     <Button
         android:id="@+id/btnConfirmPark"

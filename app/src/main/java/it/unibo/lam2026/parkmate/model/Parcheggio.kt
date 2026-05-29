@@ -22,6 +22,9 @@ data class SessioneParcheggio(
     val fotoPath: String? = null, // Percorso del file immagine sul telefono
 
     val isAttivo: Boolean = true, // Di default, quando crei il record, il parcheggio è attivo
+    @ColumnInfo(name = "archiviato") val archiviato: Boolean = false,
+    // CAMPI PER NOTIFICHE E CALCOLI
+    val tariffa: Double = 0.0,
+    val scadenzaTimestamp: Long? = null
 
-    @ColumnInfo(name = "archiviato") val archiviato: Boolean = false
 )
