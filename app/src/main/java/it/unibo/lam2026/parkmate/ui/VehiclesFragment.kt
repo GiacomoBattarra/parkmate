@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
+import it.unibo.lam2026.parkmate.R
 import it.unibo.lam2026.parkmate.databinding.FragmentVehiclesBinding
 import it.unibo.lam2026.parkmate.model.AppDatabase
 import it.unibo.lam2026.parkmate.model.VeicoloRepository
@@ -55,12 +56,56 @@ class VehiclesFragment : Fragment() {
 
         // 5. Bottone '+' per aggiungere un nuovo veicolo
         binding.fabAggiungiVeicolo.setOnClickListener {
-            Toast.makeText(requireContext(), "Qui inseriremo il Dialog per aggiungere un veicolo!", Toast.LENGTH_SHORT).show()
+            mostraDialogAggiuntaVeicolo()
         }
 
         // 6. Diciamo al ViewModel di caricare i dati la prima volta
         viewModel.caricaVeicoli()
+
     }
+    private fun mostraDialogAggiuntaVeicolo() {
+        // 1. Carichiamo (inflate) il layout XML che abbiamo appena creato
+        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_aggiungi_veicolo, null)
+        val editNome = dialogView.findViewById<android.widget.EditText>(R.id.editNomeVeicolo)
+        val spinnerTipo = dialogView.findViewById<android.widget.Spinner>(R.id.spinnerTipoVeicolo)
+
+        // 2. Prepariamo i dati per lo Spinner (la tendina)
+        val tipiVeicolo = arrayOf("Auto", "Moto", "Bici")
+        val spinnerAdapter = android.widget.ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_spinner_dropdown_item,
+            tipiVeicolo
+        )
+        spinnerTipo.adapter = spinnerAdapter
+
+        // 3. Costruiamo e mostriamo l'AlertDialog di Google Material
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Nuovo Veicolo")
+            .setView(dialogView)
+            .setPositiveButton("Salva") { dialog, _ ->
+                // Quando l'utente preme "Salva", recuperiamo i dati
+                val nomeInserito = editNome.text.toString().trim()
+                val tipoSelezionato = spinnerTipo.selectedItem.toString()
+
+                // ALERT ERRORE COMUNE: Mai fidarsi dell'utente! Controlliamo che il nome non sia vuoto
+                if (nomeInserito.isNotEmpty()) {
+                    // Creiamo l'oggetto Veicolo (id=0 perché Room lo genera da solo!)
+                    val nuovoVeicolo = it.unibo.lam2026.parkmate.model.Veicolo(
+                        nome = nomeInserito,
+                        tipo = tipoSelezionato
+                    )
+
+                    // Lo passiamo al ViewModel che lo salverà nel Database!
+                    viewModel.aggiungiVeicolo(nuovoVeicolo)
+                    Toast.makeText(requireContext(), "Veicolo salvato!", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(requireContext(), "Inserisci un nome valido!", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Annulla", null) // Se preme annulla, si chiude da solo
+            .show()
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null

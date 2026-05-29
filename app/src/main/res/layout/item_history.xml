@@ -46,6 +46,22 @@
             android:textColor="#B00020"
             android:textStyle="bold" />
 
+        <Button
+            android:id="@+id/btnTerminaParcheggio"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Termina Sosta"
+            android:visibility="gone" />
+
+        <ImageButton
+            android:id="@+id/btnEliminaParcheggio"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="16dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_delete"
+            app:tint="@color/black" />
+
     </LinearLayout>
 
 </androidx.cardview.widget.CardView>

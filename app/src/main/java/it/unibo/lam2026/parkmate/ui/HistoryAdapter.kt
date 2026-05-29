@@ -10,7 +10,9 @@ import java.util.Date
 import java.util.Locale
 
 class HistoryAdapter(
-    private var storicoList: List<SessioneParcheggio>
+    private var storicoList: List<SessioneParcheggio>,
+    private val onTerminaClick: (SessioneParcheggio) -> Unit,
+    private val onEliminaClick: (SessioneParcheggio) -> Unit
 ) : RecyclerView.Adapter<HistoryAdapter.HistoryViewHolder>() {
 
     class HistoryViewHolder(val binding: ItemHistoryBinding) : RecyclerView.ViewHolder(binding.root)
@@ -31,13 +33,32 @@ class HistoryAdapter(
         val formattaData = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
         val dataInizio = formattaData.format(Date(sessione.startTimeStamp))
 
-        // CORRETTO: ho messo "if" al posto di "se", e aggiunto "!!" per dire a Kotlin che il dato non è nullo
-        val dataFine = if (sessione.endTimeStamp != null) {
-            formattaData.format(Date(sessione.endTimeStamp!!))
+        // Mostriamo o nascondiamo i bottoni in base allo stato del parcheggio
+        if (sessione.endTimeStamp == null || sessione.isAttivo) {
+            // PARCHEGGIO IN CORSO
+            holder.binding.tvHistoryTime.text = "Orario: $dataInizio - In corso"
+            holder.binding.btnTerminaParcheggio.visibility = android.view.View.VISIBLE
+
+            // Nascondiamo il cestino perché non si può eliminare una sosta attiva!
+            holder.binding.btnEliminaParcheggio.visibility = android.view.View.GONE
+
         } else {
-            "In corso"
+            // PARCHEGGIO TERMINATO
+            val dataFine = formattaData.format(java.util.Date(sessione.endTimeStamp!!))
+            holder.binding.tvHistoryTime.text = "Orario: $dataInizio - $dataFine"
+            holder.binding.btnTerminaParcheggio.visibility = android.view.View.GONE
+
+            // Mostriamo il cestino solo ora che la sosta è chiusa!
+            holder.binding.btnEliminaParcheggio.visibility = android.view.View.VISIBLE
         }
-        holder.binding.tvHistoryTime.text = "Orario: $dataInizio - $dataFine"
+
+        // Quando l'utente preme il bottone, lanciamo l'evento verso il Fragment
+        holder.binding.btnTerminaParcheggio.setOnClickListener {
+            onTerminaClick(sessione)
+        }
+        holder.binding.btnEliminaParcheggio.setOnClickListener {
+            onEliminaClick(sessione)
+        }
 
         holder.binding.tvHistoryLocation.text = "Coordinate: ${sessione.latitudine}, ${sessione.longitudine}"
 

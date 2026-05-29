@@ -7,6 +7,7 @@ import it.unibo.lam2026.parkmate.model.SessioneParcheggio
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 class HistoryViewModel(private val repository: ParcheggioRepository) : ViewModel() {
 
@@ -16,4 +17,14 @@ class HistoryViewModel(private val repository: ParcheggioRepository) : ViewModel
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+    // Funzione per terminare una sosta attiva
+    fun terminaParcheggio(sessionId: Long) {
+        // Calcoliamo il tempo attuale in millisecondi
+        val tempoDiFine = System.currentTimeMillis()
+
+        // Apriamo la coroutine per fare l'aggiornamento in background senza bloccare l'app
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            repository.chiudiParcheggio(sessionId, tempoDiFine)
+        }
+    }
 }
