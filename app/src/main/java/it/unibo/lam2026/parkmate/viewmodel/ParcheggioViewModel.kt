@@ -44,7 +44,8 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
         val tempoDiFine = System.currentTimeMillis()
 
         viewModelScope.launch(Dispatchers.IO) {
-            dao.chiudiParcheggio(sessionId, tempoDiFine)
+            // AGGIUNTO: , 0.0 come parametro del costo
+            dao.chiudiParcheggio(sessionId, tempoDiFine, 0.0)
         }
     }
 

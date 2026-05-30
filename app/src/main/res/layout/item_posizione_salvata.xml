@@ -3,40 +3,44 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="16dp"
+    android:padding="12dp"
     android:gravity="center_vertical">
 
-    <ImageView
+    <TextView
         android:id="@+id/image_icona_posizione"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:contentDescription="Icona Posizione"
-        android:src="@android:drawable/ic_dialog_map"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="❤️"
+        android:textSize="24sp"
         android:layout_marginEnd="16dp"/>
 
-    <LinearLayout
+    <TextView
+        android:id="@+id/text_nome_posizione"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:orientation="vertical">
+        android:text="Nome Luogo (Es. Casa)"
+        android:textColor="@android:color/black"
+        android:textSize="18sp"
+        android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/text_nome_posizione"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Nome Luogo (Es. Casa)"
-            android:textColor="@android:color/black"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+    <TextView
+        android:id="@+id/btn_modifica_posizione"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="✏️"
+        android:textSize="20sp"
+        android:padding="8dp"
+        android:background="?attr/selectableItemBackground" />
 
-        <TextView
-            android:id="@+id/text_coordinate_posizione"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Lat: 0.0, Lng: 0.0"
-            android:textColor="@android:color/darker_gray"
-            android:textSize="14sp"
-            android:layout_marginTop="4dp" />
-    </LinearLayout>
+    <TextView
+        android:id="@+id/btn_elimina_posizione"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🗑️"
+        android:textSize="20sp"
+        android:padding="8dp"
+        android:layout_marginStart="4dp"
+        android:background="?attr/selectableItemBackground" />
 
 </LinearLayout>

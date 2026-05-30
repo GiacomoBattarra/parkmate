@@ -23,6 +23,7 @@ import androidx.lifecycle.lifecycleScope
 import it.unibo.lam2026.parkmate.R
 import it.unibo.lam2026.parkmate.model.AppDatabase
 import it.unibo.lam2026.parkmate.model.ParcheggioRepository
+import it.unibo.lam2026.parkmate.model.PosizioneSalvata
 import it.unibo.lam2026.parkmate.viewmodel.MainViewModel
 import it.unibo.lam2026.parkmate.viewmodel.MainViewModelFactory
 import it.unibo.lam2026.parkmate.viewmodel.PosizioniSalvateViewModel
@@ -33,19 +34,19 @@ import java.util.Locale
 
 class MapFragment : Fragment() {
 
-    // Setup del ViewBinding specifico per i Fragment
     private var _binding: FragmentMapBinding? = null
     private val binding get() = _binding!!
     private lateinit var myLocationOverlay: MyLocationNewOverlay
 
-    // Variabili per la modalità dinamica
+    // Variabili per capire in che "modalità" ci troviamo
     private var isSelectingLocation = false
     private var isSelectingFavorite = false
 
-    // ViewModel del tuo amico (Architettura aggiornata)
-    private lateinit var viewModel: MainViewModel
+    // NUOVE VARIABILI PER LA MODIFICA
+    private var isEditingFavorite = false
+    private var locationBeingEdited: PosizioneSalvata? = null
 
-    // Il tuo ViewModel per i preferiti
+    private lateinit var viewModel: MainViewModel
     private val posizioniViewModel: PosizioniSalvateViewModel by viewModels()
 
     private val requestPermissionLauncher = registerForActivityResult(
@@ -53,10 +54,7 @@ class MapFragment : Fragment() {
     ) { permissions ->
         val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-
-        if (granted) {
-            setupMyLocation()
-        }
+        if (granted) setupMyLocation()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -67,10 +65,7 @@ class MapFragment : Fragment() {
         )
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentMapBinding.inflate(inflater, container, false)
         return binding.root
     }
@@ -78,7 +73,6 @@ class MapFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // 1. Inizializzazione ViewModel e Repository (Codice nuovo del tuo amico!)
         val dao = AppDatabase.getDatabase(requireContext()).parcheggioDao()
         val repository = ParcheggioRepository(dao)
         val factory = MainViewModelFactory(repository)
@@ -87,25 +81,23 @@ class MapFragment : Fragment() {
         setupMap()
         checkLocationPermissions()
 
-        // 2. Osserviamo la lista dei parcheggi attivi per gestire il bottone "Termina Sosta"
-        // E per disegnare i TUOI marker sulla mappa!
+        // ---------------------------------------------------------
+        // 1. DISEGNO DEI PARCHEGGI ATTIVI SULLA MAPPA
+        // ---------------------------------------------------------
         viewModel.listaParcheggi.observe(viewLifecycleOwner) { lista ->
-
-            // Pulizia vecchi marker
-            binding.mapView.overlays.removeAll { it is org.osmdroid.views.overlay.Marker }
+            binding.mapView.overlays.removeAll { it is org.osmdroid.views.overlay.Marker && it.id == "PARCHEGGIO" }
 
             if (!lista.isNullOrEmpty()) {
-                // Logica del tuo amico per il bottone in basso a sinistra
-                val sostaAttiva = lista[0] // Prende la prima sosta attiva trovata
+                val sostaAttiva = lista[0]
                 binding.btnTerminaSosta.visibility = View.VISIBLE
                 binding.btnTerminaSosta.setOnClickListener {
                     viewModel.terminaParcheggio(sostaAttiva.id)
                     Toast.makeText(requireContext(), "Parcheggio terminato!", Toast.LENGTH_SHORT).show()
                 }
 
-                // La TUA logica per disegnare i parcheggi sulla mappa
                 for (parcheggio in lista) {
                     val segnaposto = org.osmdroid.views.overlay.Marker(binding.mapView)
+                    segnaposto.id = "PARCHEGGIO"
                     segnaposto.position = org.osmdroid.util.GeoPoint(parcheggio.latitudine, parcheggio.longitudine)
                     segnaposto.title = "🚗 ${parcheggio.veicoloNome}"
                     java.lang.String.valueOf(parcheggio.tipoParcheggio).also { segnaposto.snippet = it }
@@ -113,13 +105,12 @@ class MapFragment : Fragment() {
                     segnaposto.relatedObject = parcheggio.id
                     segnaposto.infoWindow = ParkInfoWindow(binding.mapView) { idSessione ->
                         viewModel.terminaParcheggio(idSessione)
-                        Toast.makeText(requireContext(), "Sosta terminata direttamente dalla mappa!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "Sosta terminata dalla mappa!", Toast.LENGTH_SHORT).show()
                     }
 
                     segnaposto.setOnMarkerClickListener { marker, mapView ->
-                        if (marker.isInfoWindowOpen) {
-                            marker.closeInfoWindow()
-                        } else {
+                        if (marker.isInfoWindowOpen) marker.closeInfoWindow()
+                        else {
                             org.osmdroid.views.overlay.infowindow.InfoWindow.closeAllInfoWindowsOn(mapView)
                             marker.showInfoWindow()
                         }
@@ -136,12 +127,9 @@ class MapFragment : Fragment() {
                                 val via = addr.thoroughfare ?: ""
                                 val civico = addr.subThoroughfare ?: ""
                                 val citta = addr.locality ?: ""
-
                                 val indirizzoPulito = if (via.isNotEmpty() && citta.isNotEmpty()) {
                                     if (civico.isNotEmpty()) "$via $civico, $citta" else "$via, $citta"
-                                } else {
-                                    addr.getAddressLine(0)
-                                }
+                                } else addr.getAddressLine(0)
 
                                 withContext(Dispatchers.Main) {
                                     segnaposto.snippet = "${parcheggio.tipoParcheggio}\n📍 $indirizzoPulito"
@@ -158,27 +146,101 @@ class MapFragment : Fragment() {
                     binding.mapView.overlays.add(segnaposto)
                 }
             } else {
-                // Se non ci sono parcheggi attivi, nascondiamo il bottone
                 binding.btnTerminaSosta.visibility = View.GONE
             }
+            binding.mapView.invalidate()
+        }
 
-            // Diciamo alla mappa di ridisegnarsi
+        // ---------------------------------------------------------
+        // 2. DISEGNO DEI LUOGHI PREFERITI E GESTIONE BOTTONI MATITA/CESTINO
+        // ---------------------------------------------------------
+        val posizioniAdapter = PosizioniSalvateAdapter(
+            posizioni = emptyList(),
+
+            // AZIONE 1: Tocco il nome -> Sposto la mappa
+            onPosizioneClick = { posizioneSalvata ->
+                val mapController = binding.mapView.controller
+                mapController.animateTo(org.osmdroid.util.GeoPoint(posizioneSalvata.latitudine, posizioneSalvata.longitudine))
+
+                binding.recyclerPosizioniSalvate.visibility = View.GONE
+                binding.headerLuoghiSalvati.text = "I tuoi luoghi salvati ▼"
+            },
+
+            // AZIONE 2: Tocco la MATITA -> Entro in Modalità Modifica Posizione
+            onEditClick = { posizioneSalvata ->
+                // Chiude la tendina
+                binding.recyclerPosizioniSalvate.visibility = View.GONE
+                binding.headerLuoghiSalvati.text = "I tuoi luoghi salvati ▼"
+
+                // Salviamo quale luogo stiamo modificando e cambiamo modalità
+                isEditingFavorite = true
+                locationBeingEdited = posizioneSalvata
+
+                // Facciamo comparire il bersaglio e cambiamo il bottone in basso a destra
+                binding.imgCenterPin.visibility = View.VISIBLE
+                binding.fabAggiungiPosizione.setImageResource(android.R.drawable.ic_menu_save)
+
+                // Spostiamo la mappa sulle VECCHIE coordinate, per far ripartire l'utente da lì
+                val mapController = binding.mapView.controller
+                mapController.animateTo(org.osmdroid.util.GeoPoint(posizioneSalvata.latitudine, posizioneSalvata.longitudine))
+
+                Toast.makeText(requireContext(), "Sposta il bersaglio sulla nuova posizione e premi il pulsante blu", Toast.LENGTH_LONG).show()
+
+                if (::myLocationOverlay.isInitialized) myLocationOverlay.disableFollowLocation()
+            },
+
+            // AZIONE 3: Tocco il CESTINO -> Pop up di Conferma Eliminazione
+            onDeleteClick = { posizioneSalvata ->
+                android.app.AlertDialog.Builder(requireContext())
+                    .setTitle("Elimina luogo")
+                    .setMessage("Sei sicuro di voler eliminare '${posizioneSalvata.nome}'?")
+                    .setPositiveButton("Sì, elimina") { _, _ ->
+                        posizioniViewModel.eliminaPosizione(posizioneSalvata)
+                        Toast.makeText(requireContext(), "Eliminato: ${posizioneSalvata.nome}", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("Annulla", null)
+                    .show()
+            }
+        )
+
+        binding.recyclerPosizioniSalvate.adapter = posizioniAdapter
+
+        posizioniViewModel.posizioniSalvate.observe(viewLifecycleOwner) { listaAggiornata ->
+            posizioniAdapter.updateData(listaAggiornata)
+            binding.mapView.overlays.removeAll { it is org.osmdroid.views.overlay.Marker && it.id == "PREFERITO" }
+
+            for (posizione in listaAggiornata) {
+                val markerCuore = org.osmdroid.views.overlay.Marker(binding.mapView)
+                markerCuore.id = "PREFERITO"
+                markerCuore.position = org.osmdroid.util.GeoPoint(posizione.latitudine, posizione.longitudine)
+                markerCuore.title = posizione.nome
+
+                val icona = ContextCompat.getDrawable(requireContext(), R.drawable.ic_heart)
+                icona?.setTint(android.graphics.Color.RED)
+                markerCuore.icon = icona
+
+                markerCuore.setAnchor(org.osmdroid.views.overlay.Marker.ANCHOR_CENTER, org.osmdroid.views.overlay.Marker.ANCHOR_BOTTOM)
+
+                markerCuore.setOnMarkerClickListener { marker, _ ->
+                    if (marker.isInfoWindowOpen) marker.closeInfoWindow() else marker.showInfoWindow()
+                    true
+                }
+
+                binding.mapView.overlays.add(markerCuore)
+            }
             binding.mapView.invalidate()
         }
 
         // 3. BOTTONE "PARCHEGGIA QUI"
         binding.btnParkHere.setOnClickListener {
-            if (isSelectingFavorite) return@setOnClickListener
+            if (isSelectingFavorite || isEditingFavorite) return@setOnClickListener
 
             if (!isSelectingLocation) {
                 isSelectingLocation = true
                 binding.imgCenterPin.visibility = View.VISIBLE
                 binding.btnParkHere.setImageResource(android.R.drawable.ic_menu_save)
                 Toast.makeText(requireContext(), "Sposta la mappa e conferma la posizione", Toast.LENGTH_SHORT).show()
-
-                if (::myLocationOverlay.isInitialized) {
-                    myLocationOverlay.disableFollowLocation()
-                }
+                if (::myLocationOverlay.isInitialized) myLocationOverlay.disableFollowLocation()
             } else {
                 val centerPoint = binding.mapView.mapCenter as GeoPoint
                 val bottomSheet = ParkBottomSheetFragment()
@@ -194,41 +256,69 @@ class MapFragment : Fragment() {
             }
         }
 
-        // 5. GESTIONE LUOGHI SALVATI (Il TUO codice!)
-        val posizioniAdapter = PosizioniSalvateAdapter(
-            posizioni = emptyList(),
-            onPosizioneClick = { posizioneSalvata ->
-                Toast.makeText(requireContext(), "Andiamo a: ${posizioneSalvata.nome}", Toast.LENGTH_SHORT).show()
-                val mapController = binding.mapView.controller
-                mapController.animateTo(
-                    org.osmdroid.util.GeoPoint(posizioneSalvata.latitudine, posizioneSalvata.longitudine)
-                )
-            },
-            onDeleteClick = { posizioneSalvata ->
-                posizioniViewModel.eliminaPosizione(posizioneSalvata)
-                Toast.makeText(requireContext(), "Eliminato: ${posizioneSalvata.nome}", Toast.LENGTH_SHORT).show()
+        // 4. MENU A TENDINA
+        var isListExpanded = false
+        binding.headerLuoghiSalvati.setOnClickListener {
+            isListExpanded = !isListExpanded
+            if (isListExpanded) {
+                binding.recyclerPosizioniSalvate.visibility = View.VISIBLE
+                binding.headerLuoghiSalvati.text = "I tuoi luoghi salvati ▲"
+            } else {
+                binding.recyclerPosizioniSalvate.visibility = View.GONE
+                binding.headerLuoghiSalvati.text = "I tuoi luoghi salvati ▼"
             }
-        )
-
-        binding.recyclerPosizioniSalvate.adapter = posizioniAdapter
-
-        posizioniViewModel.posizioniSalvate.observe(viewLifecycleOwner) { listaAggiornata ->
-            posizioniAdapter.updateData(listaAggiornata)
         }
 
-        // Bottone "+" per i Preferiti
+        // 5. BOTTONE "+" AGGIUNGI / CONFERMA MODIFICA PREFERITO
         binding.fabAggiungiPosizione.setOnClickListener {
             if (isSelectingLocation) return@setOnClickListener
 
+            // --- FASE DI CONFERMA MODIFICA (Matita) ---
+            if (isEditingFavorite) {
+                val currentGeoPoint = binding.mapView.mapCenter as GeoPoint
+                isEditingFavorite = false
+                binding.imgCenterPin.visibility = View.GONE
+                binding.fabAggiungiPosizione.setImageResource(android.R.drawable.ic_input_add)
+
+                val campoTesto = android.widget.EditText(requireContext())
+                campoTesto.setText(locationBeingEdited?.nome) // Precompila con il vecchio nome
+
+                android.app.AlertDialog.Builder(requireContext())
+                    .setTitle("Conferma Modifica")
+                    .setMessage("Modifica il nome se lo desideri:")
+                    .setView(campoTesto)
+                    .setPositiveButton("Aggiorna") { dialog, _ ->
+                        val nomeInserito = campoTesto.text.toString()
+                        if (nomeInserito.isNotBlank() && locationBeingEdited != null) {
+                            // Copiamo l'oggetto aggiornando NOME e nuove COORDINATE
+                            val posizioneAggiornata = locationBeingEdited!!.copy(
+                                nome = nomeInserito,
+                                latitudine = currentGeoPoint.latitude,
+                                longitudine = currentGeoPoint.longitude
+                            )
+                            posizioniViewModel.aggiornaPosizione(posizioneAggiornata)
+                            Toast.makeText(requireContext(), "Posizione aggiornata!", Toast.LENGTH_SHORT).show()
+                            locationBeingEdited = null
+                            if (!isListExpanded) binding.headerLuoghiSalvati.performClick()
+                        } else {
+                            Toast.makeText(requireContext(), "Il nome non può essere vuoto!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .setNegativeButton("Annulla") { dialog, _ -> locationBeingEdited = null }
+                    .setOnCancelListener { locationBeingEdited = null }
+                    .show()
+
+                return@setOnClickListener // Esci per non far partire l'aggiunta di un nuovo luogo
+            }
+
+            // --- FASE DI AGGIUNTA NUOVO LUOGO (+) ---
             if (!isSelectingFavorite) {
                 isSelectingFavorite = true
                 binding.imgCenterPin.visibility = View.VISIBLE
                 binding.fabAggiungiPosizione.setImageResource(android.R.drawable.ic_menu_save)
-                Toast.makeText(requireContext(), "Sposta la mappa sul luogo da salvare e premi di nuovo", Toast.LENGTH_LONG).show()
+                Toast.makeText(requireContext(), "Sposta il bersaglio sul luogo e premi di nuovo", Toast.LENGTH_LONG).show()
 
-                if (::myLocationOverlay.isInitialized) {
-                    myLocationOverlay.disableFollowLocation()
-                }
+                if (::myLocationOverlay.isInitialized) myLocationOverlay.disableFollowLocation()
             } else {
                 val currentGeoPoint = binding.mapView.mapCenter as GeoPoint
 
@@ -247,55 +337,37 @@ class MapFragment : Fragment() {
                         val nomeInserito = campoTesto.text.toString()
 
                         if (nomeInserito.isNotBlank()) {
-                            posizioniViewModel.salvaNuovaPosizione(
-                                nomeLuogo = nomeInserito,
-                                lat = currentGeoPoint.latitude,
-                                lng = currentGeoPoint.longitude
-                            )
+                            posizioniViewModel.salvaNuovaPosizione(nomeInserito, currentGeoPoint.latitude, currentGeoPoint.longitude)
                             Toast.makeText(requireContext(), "Salvato: $nomeInserito", Toast.LENGTH_SHORT).show()
+                            if (!isListExpanded) binding.headerLuoghiSalvati.performClick()
                         } else {
                             Toast.makeText(requireContext(), "Il nome non può essere vuoto!", Toast.LENGTH_SHORT).show()
                         }
                     }
-                    .setNegativeButton("Annulla") { dialog, _ ->
-                        dialog.dismiss()
-                    }
+                    .setNegativeButton("Annulla") { dialog, _ -> dialog.dismiss() }
                     .show()
             }
         }
     }
 
     private fun checkLocationPermissions() {
-        when {
-            ContextCompat.checkSelfPermission(
-                requireContext(),
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED -> {
-                setupMyLocation()
-            }
-            else -> {
-                requestPermissionLauncher.launch(
-                    arrayOf(
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
-                    )
-                )
-            }
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            setupMyLocation()
+        } else {
+            requestPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
     }
 
     private fun setupMap() {
         val mapController = binding.mapView.controller
         mapController.setZoom(15.0)
-        val startPoint = GeoPoint(44.4949, 11.3426)
-        mapController.setCenter(startPoint)
+        mapController.setCenter(GeoPoint(44.4949, 11.3426))
         binding.mapView.minZoomLevel = 3.0
         binding.mapView.setMultiTouchControls(true)
     }
 
     private fun setupMyLocation() {
-        val locationProvider = GpsMyLocationProvider(requireContext())
-        myLocationOverlay = MyLocationNewOverlay(locationProvider, binding.mapView)
+        myLocationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(requireContext()), binding.mapView)
         myLocationOverlay.enableMyLocation()
         myLocationOverlay.enableFollowLocation()
         binding.mapView.overlays.add(myLocationOverlay)
@@ -304,17 +376,13 @@ class MapFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         binding.mapView.onResume()
-        if (::myLocationOverlay.isInitialized) {
-            myLocationOverlay.enableMyLocation()
-        }
+        if (::myLocationOverlay.isInitialized) myLocationOverlay.enableMyLocation()
     }
 
     override fun onPause() {
         super.onPause()
         binding.mapView.onPause()
-        if (::myLocationOverlay.isInitialized) {
-            myLocationOverlay.disableMyLocation()
-        }
+        if (::myLocationOverlay.isInitialized) myLocationOverlay.disableMyLocation()
     }
 
     override fun onDestroyView() {
@@ -331,17 +399,13 @@ class ParkInfoWindow(mapView: org.osmdroid.views.MapView, private val onTerminaC
 
     override fun onOpen(item: Any?) {
         val marker = item as? org.osmdroid.views.overlay.Marker ?: return
-
         val txtTitle = mView.findViewById<android.widget.TextView>(R.id.txtCustomTitle)
         val txtDescription = mView.findViewById<android.widget.TextView>(R.id.txtCustomDescription)
-
         txtTitle?.text = marker.title
         txtDescription?.text = marker.snippet
-
         val sessionId = marker.relatedObject as? Long ?: return
 
-        val btnTermina = mView.findViewById<android.widget.Button>(R.id.btnInfoWindowTermina)
-        btnTermina?.setOnClickListener {
+        mView.findViewById<android.widget.Button>(R.id.btnInfoWindowTermina)?.setOnClickListener {
             onTerminaClick(sessionId)
             close()
         }

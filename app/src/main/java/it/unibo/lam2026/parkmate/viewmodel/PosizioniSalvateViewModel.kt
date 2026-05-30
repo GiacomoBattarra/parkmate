@@ -15,27 +15,28 @@ class PosizioniSalvateViewModel(application: Application) : AndroidViewModel(app
     private val dao = AppDatabase.getDatabase(application).posizioneSalvataDao()
 
     // 2. Prepariamo la lista osservabile che la Mappa potrà "ascoltare".
-    // Usiamo asLiveData() per convertire il Flow del DAO in un formato comodo per la UI
     val posizioniSalvate = dao.getAllPosizioni().asLiveData()
 
     // 3. La funzione per salvare una nuova posizione
     fun salvaNuovaPosizione(nomeLuogo: String, lat: Double, lng: Double) {
-
-        // viewModelScope.launch fa partire un processo in background!
         viewModelScope.launch(Dispatchers.IO) {
-            // Creiamo l'oggetto da salvare
             val nuovaPosizione = PosizioneSalvata(
                 nome = nomeLuogo,
                 latitudine = lat,
                 longitudine = lng
             )
-
-            // Diciamo al DAO di inserirlo nel Database
             dao.insertPosizione(nuovaPosizione)
         }
     }
 
-    // 4. (Opzionale ma utile) La funzione per eliminare una posizione
+    // --- NUOVO: La funzione per aggiornare una posizione esistente ---
+    fun aggiornaPosizione(posizione: PosizioneSalvata) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.updatePosizione(posizione)
+        }
+    }
+
+    // 4. La funzione per eliminare una posizione
     fun eliminaPosizione(posizione: PosizioneSalvata) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.deletePosizione(posizione)

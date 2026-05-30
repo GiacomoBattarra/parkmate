@@ -45,16 +45,21 @@
             android:padding="8dp">
 
             <TextView
+                android:id="@+id/header_luoghi_salvati"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="I tuoi luoghi salvati"
+                android:text="I tuoi luoghi salvati ▼"
                 android:textStyle="bold"
-                android:padding="8dp"/>
+                android:padding="8dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground"/>
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recycler_posizioni_salvate"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:visibility="gone"
                 app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
         </LinearLayout>

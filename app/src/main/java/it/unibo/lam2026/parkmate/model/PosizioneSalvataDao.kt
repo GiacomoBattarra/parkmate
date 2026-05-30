@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -13,11 +14,13 @@ interface PosizioneSalvataDao {
     @Query("SELECT * FROM posizioni_salvate ORDER BY nome ASC")
     fun getAllPosizioni(): Flow<List<PosizioneSalvata>>
 
-    // 1. Tolto 'suspend' e tolto ': Long'
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertPosizione(posizione: PosizioneSalvata)
 
-    // 2. Tolto 'suspend' e tolto ': Int'
+    // --- NUOVO: Funzione per aggiornare il nome ---
+    @Update
+    fun updatePosizione(posizione: PosizioneSalvata)
+
     @Delete
     fun deletePosizione(posizione: PosizioneSalvata)
 }
