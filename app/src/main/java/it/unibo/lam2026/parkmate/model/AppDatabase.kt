@@ -5,9 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-// 1. MODIFICA QUI: Abbiamo sostituito Parcheggio::class con SessioneParcheggio::class
-// e aumentato la versione a 6
-@Database(entities = [SessioneParcheggio::class, Veicolo::class], version = 6, exportSchema = false)
+// ECCO LA MODIFICA: Ora ci sono tutte e 3 le tabelle!
+@Database(entities = [SessioneParcheggio::class, Veicolo::class, PosizioneSalvata::class], version = 6, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     // I tuoi DAO esistenti
