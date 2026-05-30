@@ -123,11 +123,9 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
         val tempoDiFine = System.currentTimeMillis()
 
         viewModelScope.launch(Dispatchers.IO) {
-            dao.chiudiParcheggio(sessionId, tempoDiFine)
-
-            // [NUOVO] Disattiviamo TUTTI i Worker e cancelliamo le notifiche in sospeso
-            // Nota: nella versione reale dovremmo passare il nome o l'ID per fermare solo il worker specifico,
-            // ma per ora spegniamo brutalmente tutti i lavori per sicurezza alla chiusura.
+            // AGGIUNTO: , 0.0 come parametro del costo
+            dao.chiudiParcheggio(sessionId, tempoDiFine, 0.0)
+            
             WorkManager.getInstance(getApplication()).cancelAllWork()
         }
     }
