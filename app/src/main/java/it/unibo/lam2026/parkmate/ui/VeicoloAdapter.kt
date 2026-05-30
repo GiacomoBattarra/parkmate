@@ -8,7 +8,8 @@ import it.unibo.lam2026.parkmate.model.Veicolo
 
 class VeicoloAdapter(
     private var listaVeicoli: List<Veicolo>,
-    private val onEliminaClick: (Veicolo) -> Unit
+    private val onEliminaClick: (Veicolo) -> Unit,
+    private val onModificaClick: (Veicolo) -> Unit
 ) : RecyclerView.Adapter<VeicoloAdapter.VeicoloViewHolder>() {
 
     inner class VeicoloViewHolder(val binding: ItemVeicoloBinding) : RecyclerView.ViewHolder(binding.root)
@@ -31,8 +32,14 @@ class VeicoloAdapter(
             "bici" -> holder.binding.imgTipoVeicolo.setImageResource(android.R.drawable.ic_menu_compass)
         }
 
+        // Click sul Cestino
         holder.binding.btnEliminaVeicolo.setOnClickListener {
             onEliminaClick(veicoloAttuale)
+        }
+
+        // Click sulla Matitina
+        holder.binding.btnModificaVeicolo.setOnClickListener {
+            onModificaClick(veicoloAttuale)
         }
     }
 

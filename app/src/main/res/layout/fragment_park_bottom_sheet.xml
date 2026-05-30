@@ -4,13 +4,15 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:padding="24dp"
-    android:background="@drawable/rounded_bottom_sheet_bg"> <TextView
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:text="Inizia Parcheggio"
-    android:textSize="20sp"
-    android:textStyle="bold"
-    android:layout_marginBottom="16dp"/>
+    android:background="@drawable/rounded_bottom_sheet_bg">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Inizia Parcheggio"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp"/>
 
     <TextView
         android:layout_width="wrap_content"
@@ -43,27 +45,81 @@
         android:id="@+id/radioGroupParkType"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="24dp">
+        android:layout_marginBottom="16dp">
 
         <RadioButton
             android:id="@+id/radioFree"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Libero (Nessun costo)" />
-
-        <RadioButton
-            android:id="@+id/radioHourly"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="A pagamento (Tariffa oraria)" />
+            android:text="Libero (Nessun costo)"
+            android:checked="true"/> <RadioButton
+        android:id="@+id/radioHourly"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="A pagamento (Tariffa oraria)" />
 
         <RadioButton
             android:id="@+id/radioFixed"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Ticket a scadenza fissa" />
-
     </RadioGroup>
+
+    <LinearLayout
+        android:id="@+id/layoutHourly"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:layout_marginBottom="16dp">
+        <TextView android:text="Tariffa oraria (€/h):" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <EditText android:id="@+id/etHourlyTariff" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="numberDecimal" android:hint="Es. 1.50"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/layoutFixed"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:layout_marginBottom="16dp">
+        <TextView android:text="Costo totale ticket (€):" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <EditText android:id="@+id/etFixedCost" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="numberDecimal" android:hint="Es. 5.00"/>
+
+        <TextView android:text="Durata sosta (minuti):" android:layout_marginTop="8dp" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <EditText android:id="@+id/etFixedDuration" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" android:hint="Es. 120"/>
+    </LinearLayout>
+
+    <EditText
+        android:id="@+id/etNotaParcheggio"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Aggiungi una nota (es. Pilastro B4)"
+        android:inputType="textCapSentences"
+        android:layout_marginBottom="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+
+        <Button
+            android:id="@+id/btnScattaFoto"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📷 Scatta Foto"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+
+        <ImageView
+            android:id="@+id/imgAnteprimaFoto"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="16dp"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
+    </LinearLayout>
 
     <Button
         android:id="@+id/btnConfirmPark"

@@ -38,20 +38,24 @@ class VehiclesFragment : Fragment() {
         val factory = VeicoliViewModelFactory(repository)
         viewModel = ViewModelProvider(this, factory)[VeicoliViewModel::class.java]
 
-        // 3. Prepariamo la RecyclerView (la lista)
-        adapter = VeicoloAdapter(emptyList()) { veicoloEliminato ->
-
-            // Questo blocco scatta quando l'utente preme il cestino sull'Adapter!
-            viewModel.rimuoviVeicolo(veicoloEliminato.id)
-            Toast.makeText(requireContext(), "Veicolo eliminato", Toast.LENGTH_SHORT).show()
-        }
-
+        // 3. Prepariamo il LayoutManager della lista
         binding.recyclerViewVeicoli.layoutManager = LinearLayoutManager(requireContext())
-        binding.recyclerViewVeicoli.adapter = adapter
 
-        // 4. Osserviamo il database: quando i veicoli cambiano, aggiorniamo la lista visiva!
+        // 4. OSSERVIAMO IL DATABASE: Qui dentro 'veicoli' prende vita!
         viewModel.listaVeicoli.observe(viewLifecycleOwner) { veicoli ->
-            adapter.aggiornaDati(veicoli)
+
+            // Creiamo l'Adapter usando i dati appena arrivati dal DB
+            adapter = VeicoloAdapter(
+                listaVeicoli = veicoli,
+                onEliminaClick = { veicoloDaEliminare ->
+                    viewModel.rimuoviVeicolo(veicoloDaEliminare.id)
+                },
+                onModificaClick = { veicoloDaModificare ->
+                    mostraDialogModifica(veicoloDaModificare)
+                }
+            )
+            // Attacchiamo l'Adapter alla RecyclerView
+            binding.recyclerViewVeicoli.adapter = adapter
         }
 
         // 5. Bottone '+' per aggiungere un nuovo veicolo
@@ -61,7 +65,6 @@ class VehiclesFragment : Fragment() {
 
         // 6. Diciamo al ViewModel di caricare i dati la prima volta
         viewModel.caricaVeicoli()
-
     }
     private fun mostraDialogAggiuntaVeicolo() {
         // 1. Carichiamo (inflate) il layout XML che abbiamo appena creato
@@ -109,5 +112,43 @@ class VehiclesFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+    }
+
+    private fun mostraDialogModifica(veicoloDaModificare: it.unibo.lam2026.parkmate.model.Veicolo) {
+        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_aggiungi_veicolo, null)
+        val editNome = dialogView.findViewById<android.widget.EditText>(R.id.editNomeVeicolo)
+        val spinnerTipo = dialogView.findViewById<android.widget.Spinner>(R.id.spinnerTipoVeicolo)
+
+        // Setup dello spinner (Stesse opzioni che usi per aggiungerlo)
+        val tipi = arrayOf("Auto", "Moto", "Bici")
+        val arrayAdapter = android.widget.ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, tipi)
+        spinnerTipo.adapter = arrayAdapter
+
+        // --- PRE-COMPILIAMO I CAMPI ---
+        editNome.setText(veicoloDaModificare.nome)
+        val posizioneTipo = tipi.indexOf(veicoloDaModificare.tipo)
+        if (posizioneTipo >= 0) spinnerTipo.setSelection(posizioneTipo)
+
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Modifica Veicolo")
+            .setView(dialogView)
+            .setPositiveButton("Aggiorna") { _, _ ->
+                val nomeInserito = editNome.text.toString().trim()
+                val tipoSelezionato = spinnerTipo.selectedItem.toString()
+
+                if (nomeInserito.isNotEmpty()) {
+                    // Creiamo il nuovo oggetto PASSANDO IL VECCHIO ID!
+                    val veicoloAggiornato = it.unibo.lam2026.parkmate.model.Veicolo(
+                        id = veicoloDaModificare.id, // Fondamentale per dire al DB "sovrascrivi questo"
+                        nome = nomeInserito,
+                        tipo = tipoSelezionato
+                    )
+
+                    viewModel.aggiornaVeicolo(veicoloAggiornato)
+                    android.widget.Toast.makeText(requireContext(), "Veicolo aggiornato!", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Annulla", null)
+            .show()
     }
 }

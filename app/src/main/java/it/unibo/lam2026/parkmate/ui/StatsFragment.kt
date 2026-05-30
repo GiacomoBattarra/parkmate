@@ -12,6 +12,17 @@ import it.unibo.lam2026.parkmate.databinding.FragmentStatsBinding
 import it.unibo.lam2026.parkmate.model.SessioneParcheggio // 1. IMPORT REALE AGGIORNATO!
 import it.unibo.lam2026.parkmate.viewmodel.ParcheggioViewModel
 import java.util.Calendar
+import com.github.mikephil.charting.data.BarEntry
+import com.github.mikephil.charting.data.BarDataSet
+import com.github.mikephil.charting.data.BarData
+import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
+import com.github.mikephil.charting.components.XAxis
+import org.osmdroid.config.Configuration
+import androidx.preference.PreferenceManager
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.overlay.Polygon
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 
 class StatsFragment : Fragment() {
 
@@ -40,11 +51,51 @@ class StatsFragment : Fragment() {
         adapterSpinner.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         binding.spinnerTimeFilter.adapter = adapterSpinner
 
+        // --- CONFIGURAZIONE MAPPA HEATMAP ---
+        Configuration.getInstance().load(requireContext(), PreferenceManager.getDefaultSharedPreferences(requireContext()))
+
+        binding.mapViewStats.setMultiTouchControls(true)
+        binding.mapViewStats.controller.setZoom(14.0) // Zoom iniziale
+
+        // IL TRUCCO DELLO SFONDO NEUTRO: Togliamo i colori alla mappa!
+        val colorMatrix = ColorMatrix()
+        colorMatrix.setSaturation(0f) // 0 = Bianco e nero puro!
+        val filter = ColorMatrixColorFilter(colorMatrix)
+        binding.mapViewStats.overlayManager.tilesOverlay.setColorFilter(filter)
+
         // Ascolta il database dei parcheggi
         viewModel.statisticheGlobaliParcheggi.observe(viewLifecycleOwner) { listaParcheggi ->
             if (listaParcheggi != null) {
                 listaCompletaParcheggi = listaParcheggi
                 aggiornaStatistiche(binding.spinnerTimeFilter.selectedItemPosition)
+
+                // 1. Estraiamo i nomi unici dei veicoli (es. se hai parcheggiato 10 volte la Panda, "Panda" apparirà una volta sola)
+                val nomiVeicoli = mutableListOf("Tutti i veicoli")
+                nomiVeicoli.addAll(listaParcheggi.map { it.veicoloNome }.distinct())
+
+                // 2. Riempiamo lo Spinner con i nomi
+                val spinnerAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, nomiVeicoli)
+                binding.spinnerVehicleFilter.adapter = spinnerAdapter
+
+                // 3. Quando l'utente seleziona un veicolo dal menu a tendina...
+                binding.spinnerVehicleFilter.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                    override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                        val veicoloScelto = nomiVeicoli[position]
+
+                        // Creiamo una nuova lista tenendo solo i parcheggi del veicolo scelto
+                        val listaFiltrata = if (veicoloScelto == "Tutti i veicoli") {
+                            listaCompletaParcheggi
+                        } else {
+                            listaCompletaParcheggi.filter { it.veicoloNome == veicoloScelto }
+                        }
+
+                        // LA MAGIA: Aggiorniamo contemporaneamente Grafico e Mappa solo con i dati filtrati!
+                        impostaGrafico(listaFiltrata)
+                        disegnaHeatmap(listaFiltrata)
+                    }
+
+                    override fun onNothingSelected(parent: AdapterView<*>?) {}
+                }
             }
         }
 
@@ -122,4 +173,73 @@ class StatsFragment : Fragment() {
         super.onDestroyView()
         _binding = null
     }
+
+    private fun impostaGrafico(listaParcheggi: List<SessioneParcheggio>) {
+        val entries = ArrayList<BarEntry>()
+        val mesi = arrayOf("Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic")
+
+        // 1. Raggruppiamo i parcheggi per mese (0 = Gennaio, 11 = Dicembre)
+        val raggruppatiPerMese = listaParcheggi.groupBy { sosta ->
+            val cal = Calendar.getInstance()
+            cal.timeInMillis = sosta.startTimeStamp
+            cal.get(Calendar.MONTH)
+        }
+
+        // 2. Creiamo i punti del grafico (BarEntry) per tutti e 12 i mesi
+        for (i in 0..11) {
+            val numeroSoste = raggruppatiPerMese[i]?.size ?: 0
+            entries.add(BarEntry(i.toFloat(), numeroSoste.toFloat()))
+        }
+
+        // 3. Impacchettiamo i dati (DataSet)
+        val dataSet = BarDataSet(entries, "Numero di soste")
+        dataSet.color = resources.getColor(android.R.color.holo_blue_light, null)
+        dataSet.valueTextSize = 12f
+
+        // 4. Consegniamo i dati al grafico
+        binding.barChartSoste.data = BarData(dataSet)
+
+        // --- ABBELLIAMO IL GRAFICO ---
+        val xAxis = binding.barChartSoste.xAxis
+        xAxis.valueFormatter = IndexAxisValueFormatter(mesi) // Mettiamo i nomi dei mesi!
+        xAxis.position = XAxis.XAxisPosition.BOTTOM // Testo in basso
+        xAxis.setDrawGridLines(false) // Via la griglia verticale brutta
+        xAxis.granularity = 1f // Evita che i mesi si sovrappongano
+
+        binding.barChartSoste.description.isEnabled = false // Togliamo la scritta "Description" di default
+        binding.barChartSoste.axisRight.isEnabled = false // Togliamo l'asse Y di destra (ne basta uno a sinistra)
+
+        // 5. [FONDAMENTALE] Diciamo al grafico di ridisegnarsi!
+        binding.barChartSoste.invalidate()
+    }
+
+    private fun disegnaHeatmap(listaParcheggi: List<SessioneParcheggio>) {
+        binding.mapViewStats.overlays.removeAll { it is Polygon && it.id == "heatmap_circle" }
+
+        var ultimoPunto: GeoPoint? = null
+
+        for (sosta in listaParcheggi) {
+            ultimoPunto = GeoPoint(sosta.latitudine, sosta.longitudine)
+
+            val cerchio = Polygon(binding.mapViewStats).apply {
+                id = "heatmap_circle"
+                // [MODIFICATO] Raggio più piccolo: 50 metri invece di 150
+                points = Polygon.pointsAsCircle(ultimoPunto, 50.0)
+
+                // [MODIFICATO] Colore rosso leggermente più opaco (Hex: 30)
+                fillColor = android.graphics.Color.parseColor("#30FF0000")
+                strokeColor = android.graphics.Color.TRANSPARENT
+                strokeWidth = 0f
+            }
+            binding.mapViewStats.overlays.add(cerchio)
+        }
+
+        // Se c'è almeno un parcheggio, centriamo la mappa su quello
+        if (ultimoPunto != null) {
+            binding.mapViewStats.controller.setCenter(ultimoPunto)
+        }
+
+        binding.mapViewStats.invalidate()
+    }
+
 }
