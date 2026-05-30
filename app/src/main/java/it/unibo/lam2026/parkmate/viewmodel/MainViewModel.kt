@@ -9,23 +9,29 @@ import kotlinx.coroutines.launch
 
 class MainViewModel(private val repository: ParcheggioRepository) : ViewModel() {
 
-    // 1. IL FLOW DIVENTA LIVEDATA
-    // Trasformiamo il "tubo" del DB (Flow) nel "canale radio" (LiveData) per il Fragment
+    // 1. Il Flow diventa LiveData per il Fragment
     val listaParcheggi = repository.parcheggiAttivi.asLiveData()
 
-    // Non serve più una funzione "caricaParcheggi()", ci pensa il Flow in automatico!
+    // 2. Aggiunta della funzione per terminare il parcheggio
+    fun terminaParcheggio(sessionId: Long) {
+        val tempoAttuale = System.currentTimeMillis()
+        // Qui calcoliamo il costo (es. 2.50 euro fissi per test)
+        val costoCalcolato = 2.50
+
+        viewModelScope.launch {
+            repository.chiudiParcheggio(sessionId, tempoAttuale, costoCalcolato)
+        }
+    }
 
     fun aggiungiParcheggioDiTest() {
         viewModelScope.launch {
-            // 2. USIAMO IL NOME CORRETTO: SessioneParcheggio
             val nuovo = SessioneParcheggio(
                 veicoloNome = "Mia Auto",
                 tipoParcheggio = "Libero",
                 latitudine = 44.4939,
                 longitudine = 11.3428,
-                startTimeStamp = System.currentTimeMillis() // Orario di adesso
+                startTimeStamp = System.currentTimeMillis()
             )
-            // 3. USIAMO IL METODO DEL REPOSITORY CORRETTO
             repository.inserisciParcheggio(nuovo)
         }
     }

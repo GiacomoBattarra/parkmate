@@ -10,11 +10,14 @@ import androidx.room.RoomDatabase
 @Database(entities = [SessioneParcheggio::class, Veicolo::class], version = 6, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
-    // Colleghiamo i nostri DAO
+    // I tuoi DAO esistenti
     abstract fun parcheggioDao(): ParcheggioDao
     abstract fun veicoloDao(): VeicoloDao
 
-    // Questo blocco garantisce che esista UNA SOLA istanza del database in tutta l'app
+    // Il nuovo DAO per i preferiti
+    abstract fun posizioneSalvataDao(): PosizioneSalvataDao
+
+    // Blocco per il Singleton (Istanza unica)
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
@@ -24,10 +27,9 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "parkmate_database" // Il nome del file fisico sul telefono
+                    "parkmate_database" // Nome del file fisico
                 )
-                    // fallbackToDestructiveMigration cancella i vecchi dati se la versione cambia
-                    // (Ottimo in fase di sviluppo per evitare crash)
+                    // Questa riga ci salva la vita: cancella il vecchio DB e lo ricrea aggiornato
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
