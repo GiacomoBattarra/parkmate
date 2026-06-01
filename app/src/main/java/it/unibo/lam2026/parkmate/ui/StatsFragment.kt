@@ -89,9 +89,12 @@ class StatsFragment : Fragment() {
                             listaCompletaParcheggi.filter { it.veicoloNome == veicoloScelto }
                         }
 
-                        // LA MAGIA: Aggiorniamo contemporaneamente Grafico e Mappa solo con i dati filtrati!
+                        // Aggiorniamo contemporaneamente Grafico e Mappa solo con i dati filtrati!
                         impostaGrafico(listaFiltrata)
                         disegnaHeatmap(listaFiltrata)
+
+                        // Chiamiamo la funzione passandogli la stessa lista filtrata!
+                        aggiornaCardParkingEffort(listaFiltrata)
                     }
 
                     override fun onNothingSelected(parent: AdapterView<*>?) {}
@@ -167,6 +170,10 @@ class StatsFragment : Fragment() {
         binding.tvHistoryParkings.text = "Visibili nello storico: 0"
         binding.tvMostUsedVehicle.text = "Nessun dato"
         binding.tvMostFrequentType.text = "Nessun dato"
+
+        // Resettiamo la card se il database è completamente vuoto
+        binding.tvParkingScoreValue.text = "-- / 100"
+        binding.tvParkingScoreComment.text = "Inizia a viaggiare per calcolare il tuo punteggio!"
     }
 
     override fun onDestroyView() {
@@ -240,6 +247,47 @@ class StatsFragment : Fragment() {
         }
 
         binding.mapViewStats.invalidate()
+    }
+
+    // Calcola l'effort score medio su base 100 e aggiorna la vostra card personalizzata
+    private fun aggiornaCardParkingEffort(listaParcheggi: List<SessioneParcheggio>) {
+        // 1. Consideriamo solo i parcheggi rilevati automaticamente dai sensori
+        val sessioniConScore = listaParcheggi.filter { it.parkingEffortScore != null }
+
+        // Gestione dello stato vuoto (se l'app è appena stata installata)
+        if (sessioniConScore.isEmpty()) {
+            binding.tvParkingScoreValue.text = "-- / 100"
+            binding.tvParkingScoreComment.text = "Inizia a viaggiare per calcolare il tuo punteggio!"
+            return
+        }
+
+        // 2. Mappiamo ogni voto del DB (1-5) nel rispettivo punteggio in centesimi e facciamo la somma
+        val sommaPunteggiCentesimi = sessioniConScore.sumOf { sosta ->
+            when (sosta.parkingEffortScore) {
+                1 -> 100
+                2 -> 80
+                3 -> 60
+                4 -> 40
+                5 -> 20
+                else -> 0
+            }
+        }
+
+        // 3. Calcoliamo la media matematica reale
+        val mediaPunteggio = sommaPunteggiCentesimi.toDouble() / sessioniConScore.size
+        val mediaArrotondata = Math.round(mediaPunteggio).toInt()
+
+        // 4. Aggiorniamo la grafica con il risultato reale dinamico
+        binding.tvParkingScoreValue.text = "$mediaArrotondata / 100"
+
+        // 5. Cambiamo il complimento/commento in base a quanto l'utente è stato bravo!
+        val commentoDinamico = when {
+            mediaArrotondata >= 85 -> "Bravissimo! Sei un mago del parcheggio. 🧙‍♂️"
+            mediaArrotondata >= 65 -> "Buono! Trovi parcheggio senza troppi sforzi. 👍"
+            mediaArrotondata >= 45 -> "Sforzo medio. Te la cavi abbastanza bene in città. 🏙️"
+            else -> "Che fatica! Giri un po' troppo prima di fermarti. 🚗💨"
+        }
+        binding.tvParkingScoreComment.text = commentoDinamico
     }
 
 }

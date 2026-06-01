@@ -75,6 +75,24 @@ class HistoryAdapter(
         val latCorta = String.format(Locale.getDefault(), "%.4f", sessione.latitudine)
         val lonCorta = String.format(Locale.getDefault(), "%.4f", sessione.longitudine)
         holder.binding.tvHistoryLocation.text = "Coordinate: $latCorta, $lonCorta"
+
+        // Gestione visualizzazione del Parking Effort Score
+        if (sessione.parkingEffortScore != null) {
+            holder.binding.tvHistoryEffort.visibility = View.VISIBLE
+
+            // Invertiamo la logica: il valore più basso (1) ha il massimo delle stelle (5)!
+            val valutazioneVisuale = when (sessione.parkingEffortScore) {
+                1 -> "⭐⭐⭐⭐⭐ (Ottimo - Sforzo Minimo)" // Meno di 2 min a piedi
+                2 -> "⭐⭐⭐⭐ (Buono)"                 // Tra 2 e 5 min a piedi
+                3 -> "⭐⭐⭐ (Medio)"                   // Tra 5 e 10 min a piedi
+                4 -> "⭐⭐ (Elevato)"                  // Tra 10 e 20 min a piedi
+                5 -> "⭐ (Critico - Sforzo Massimo)"   // Oltre 20 min a piedi
+                else -> ""
+            }
+            holder.binding.tvHistoryEffort.text = "Valutazione Sosta: $valutazioneVisuale"
+        } else {
+            holder.binding.tvHistoryEffort.visibility = View.GONE
+        }
     }
 
     override fun getItemCount(): Int = storicoList.size
