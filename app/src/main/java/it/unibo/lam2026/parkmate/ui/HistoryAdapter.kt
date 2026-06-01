@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import it.unibo.lam2026.parkmate.model.SessioneParcheggio
 import it.unibo.lam2026.parkmate.databinding.ItemHistoryBinding
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -71,10 +72,46 @@ class HistoryAdapter(
             onEliminaClick(sessione)
         }
 
-        // Arrotondiamo le coordinate per non avere numeri lunghissimi
-        val latCorta = String.format(Locale.getDefault(), "%.4f", sessione.latitudine)
-        val lonCorta = String.format(Locale.getDefault(), "%.4f", sessione.longitudine)
-        holder.binding.tvHistoryLocation.text = "Coordinate: $latCorta, $lonCorta"
+        // Mostriamo un testo di caricamento
+        holder.binding.tvHistoryLocation.text = "📍 Ricerca indirizzo in corso..."
+
+        // Lanciamo un processo in background per tradurre le coordinate
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val geocoder = android.location.Geocoder(holder.itemView.context, Locale.getDefault())
+                val indirizzi = geocoder.getFromLocation(sessione.latitudine, sessione.longitudine, 1)
+
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    if (!indirizzi.isNullOrEmpty()) {
+                        val addr = indirizzi[0]
+                        val via = addr.thoroughfare ?: ""
+                        val civico = addr.subThoroughfare ?: ""
+                        val citta = addr.locality ?: ""
+
+                        // Formattiamo l'indirizzo in modo pulito
+                        val indirizzoPulito = if (via.isNotEmpty() && citta.isNotEmpty()) {
+                            if (civico.isNotEmpty()) "$via $civico, $citta" else "$via, $citta"
+                        } else {
+                            addr.getAddressLine(0) ?: "Indirizzo sconosciuto"
+                        }
+
+                        holder.binding.tvHistoryLocation.text = "📍 $indirizzoPulito"
+                    } else {
+                        // Fallback in caso di via non trovata
+                        val latCorta = String.format(Locale.getDefault(), "%.4f", sessione.latitudine)
+                        val lonCorta = String.format(Locale.getDefault(), "%.4f", sessione.longitudine)
+                        holder.binding.tvHistoryLocation.text = "📍 Coord: $latCorta, $lonCorta"
+                    }
+                }
+            } catch (e: Exception) {
+                // Fallback in caso di assenza di rete internet
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    val latCorta = String.format(Locale.getDefault(), "%.4f", sessione.latitudine)
+                    val lonCorta = String.format(Locale.getDefault(), "%.4f", sessione.longitudine)
+                    holder.binding.tvHistoryLocation.text = "📍 Coord: $latCorta, $lonCorta"
+                }
+            }
+        }
     }
 
     override fun getItemCount(): Int = storicoList.size

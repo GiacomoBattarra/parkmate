@@ -42,10 +42,11 @@ class ParkingSessionWorker(
         for (sosta in sosteOravie) {
             // Calcolo del tempo trascorso in ORE (con i decimali, es. 1.5 ore)
             val millisecondiTrascorsi = tempoAttuale - sosta.startTimeStamp
-            val oreTrascorse = millisecondiTrascorsi / (1000.0 * 60.0 * 60.0)
 
-            // Calcolo del costo parziale: Ore * Tariffa Oraria
-            val costoAttuale = oreTrascorse * sosta.tariffa
+            // Allineato al ViewModel: calcolo esatto al minuto
+            val minutiTrascorsiDouble = millisecondiTrascorsi.toDouble() / (1000.0 * 60.0)
+            val costoAlMinuto = sosta.tariffa / 60.0
+            val costoAttuale = minutiTrascorsiDouble * costoAlMinuto
 
             // Formattiamo il costo con 2 decimali (es. "3.50 €")
             val costoFormattato = String.format("%.2f", costoAttuale)

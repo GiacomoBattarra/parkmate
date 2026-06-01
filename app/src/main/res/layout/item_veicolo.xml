@@ -14,7 +14,6 @@
         android:orientation="horizontal"
         android:padding="16dp">
 
-        <!-- Icona del veicolo -->
         <ImageView
             android:id="@+id/imgTipoVeicolo"
             android:layout_width="48dp"
@@ -22,7 +21,6 @@
             android:src="@android:drawable/ic_menu_directions"
             app:tint="@color/black" />
 
-        <!-- Dati del veicolo -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -46,14 +44,20 @@
                 android:textSize="14sp" />
         </LinearLayout>
 
-        <ImageButton
-            android:id="@+id/btnModificaVeicolo"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_edit" />
+        <ImageView
+            android:id="@+id/imgStatoParcheggio"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginEnd="12dp"
+            android:src="@drawable/ic_parking"
+            android:visibility="gone" /> <ImageButton
+        android:id="@+id/btnModificaVeicolo"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@android:drawable/ic_menu_edit" />
 
-        <!-- Bottone Cestino per eliminare il veicolo -->
         <ImageButton
             android:id="@+id/btnEliminaVeicolo"
             android:layout_width="48dp"

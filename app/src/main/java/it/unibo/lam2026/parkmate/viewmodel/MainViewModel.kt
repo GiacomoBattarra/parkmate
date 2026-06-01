@@ -45,8 +45,8 @@ class MainViewModel(private val repository: ParcheggioRepository) : ViewModel() 
     }
 
     // ------------------------------------------------------------------------
-    // LOGICA MATEMATICA (Usata da entrambe le funzioni qui sopra per non ripetere codice)
-    // ------------------------------------------------------------------------
+// LOGICA MATEMATICA (Usata da entrambe le funzioni qui sopra per non ripetere codice)
+// ------------------------------------------------------------------------
     private suspend fun terminaParcheggioSincrono(sessione: SessioneParcheggio) {
         val tempoAttuale = System.currentTimeMillis()
         var costoCalcolato = 0.0
@@ -55,17 +55,19 @@ class MainViewModel(private val repository: ParcheggioRepository) : ViewModel() 
             if (sessione.tipoParcheggio.contains("Fiss", ignoreCase = true)) {
                 costoCalcolato = sessione.tariffa
             } else {
+                // --- NUOVA MATEMATICA AL MINUTO ---
                 val millisecondiTrascorsi = tempoAttuale - sessione.startTimeStamp
-                val oreTrascorse = millisecondiTrascorsi.toDouble() / (1000.0 * 60.0 * 60.0)
 
-                costoCalcolato = oreTrascorse * sessione.tariffa
+                // 1. Calcoliamo i minuti esatti con i decimali
+                val minutiTrascorsi = millisecondiTrascorsi.toDouble() / (1000.0 * 60.0)
 
-                // Trucco per test: se sono passati meno di 5 minuti, arrotondiamo a 1 ora
-                if (oreTrascorse < 0.08) {
-                    costoCalcolato = sessione.tariffa
-                }
+                // 2. Troviamo il costo per singolo minuto
+                val costoAlMinuto = sessione.tariffa / 60.0
 
-                // Arrotondamento ai centesimi
+                // 3. Moltiplichiamo per ottenere il costo esatto
+                costoCalcolato = minutiTrascorsi * costoAlMinuto
+
+                // Arrotondamento ai centesimi (es. 1.45€)
                 costoCalcolato = Math.round(costoCalcolato * 100.0) / 100.0
             }
         }
