@@ -150,7 +150,7 @@ class MapFragment : Fragment() {
                         true
                     }
 
-                    lifecycleScope.launch(Dispatchers.IO) {
+                    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                         try {
                             val geocoder = Geocoder(requireContext(), Locale.getDefault())
                             val indirizzi = geocoder.getFromLocation(parcheggio.latitudine, parcheggio.longitudine, 1)
@@ -240,7 +240,10 @@ class MapFragment : Fragment() {
                 val markerCuore = org.osmdroid.views.overlay.Marker(binding.mapView)
                 markerCuore.id = "PREFERITO"
                 markerCuore.position = org.osmdroid.util.GeoPoint(posizione.latitudine, posizione.longitudine)
+
+                // Impostiamo il titolo e un testo di ricerca temporaneo
                 markerCuore.title = posizione.nome
+                markerCuore.snippet = "📍 Ricerca indirizzo in corso..."
 
                 val icona = ContextCompat.getDrawable(requireContext(), R.drawable.ic_heart)
                 icona?.setTint(android.graphics.Color.RED)
@@ -252,7 +255,7 @@ class MapFragment : Fragment() {
                 markerCuore.setAnchor(org.osmdroid.views.overlay.Marker.ANCHOR_CENTER, org.osmdroid.views.overlay.Marker.ANCHOR_BOTTOM)
 
                 markerCuore.setOnMarkerClickListener { marker, _ ->
-                    // --- NUOVO: Blocca i click fantasma se la mappa è pulita ---
+                    // Blocca i click fantasma se la mappa è pulita
                     if (isMappaPulita) return@setOnMarkerClickListener true
 
                     if (marker.isInfoWindowOpen) marker.closeInfoWindow() else marker.showInfoWindow()
@@ -260,6 +263,52 @@ class MapFragment : Fragment() {
                 }
 
                 binding.mapView.overlays.add(markerCuore)
+
+                // --- MAGIA: CHIAMIAMO IL GEOCODER IN BACKGROUND PER I PREFERITI ---
+                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        val geocoder = Geocoder(requireContext(), Locale.getDefault())
+                        val indirizzi = geocoder.getFromLocation(posizione.latitudine, posizione.longitudine, 1)
+
+                        val indirizzoPulito = if (!indirizzi.isNullOrEmpty()) {
+                            val addr = indirizzi[0]
+                            val via = addr.thoroughfare ?: ""
+                            val civico = addr.subThoroughfare ?: ""
+                            val citta = addr.locality ?: ""
+
+                            if (via.isNotEmpty() && citta.isNotEmpty()) {
+                                if (civico.isNotEmpty()) "$via $civico, $citta" else "$via, $citta"
+                            } else {
+                                addr.getAddressLine(0) ?: "Indirizzo sconosciuto"
+                            }
+                        } else {
+                            "Indirizzo non trovato"
+                        }
+
+                        // Torniamo sul Thread principale per aggiornare il fumetto
+                        withContext(Dispatchers.Main) {
+                            markerCuore.snippet = "📍 $indirizzoPulito"
+
+                            // Se l'utente ha il fumetto aperto proprio ora, lo "riavviamo" per mostrare la via
+                            if (markerCuore.isInfoWindowOpen) {
+                                markerCuore.closeInfoWindow()
+                                markerCuore.showInfoWindow()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        // Fallback se l'emulatore è offline
+                        withContext(Dispatchers.Main) {
+                            val latCorta = String.format(Locale.getDefault(), "%.4f", posizione.latitudine)
+                            val lonCorta = String.format(Locale.getDefault(), "%.4f", posizione.longitudine)
+                            markerCuore.snippet = "📍 Coord: $latCorta, $lonCorta"
+
+                            if (markerCuore.isInfoWindowOpen) {
+                                markerCuore.closeInfoWindow()
+                                markerCuore.showInfoWindow()
+                            }
+                        }
+                    }
+                }
             }
             binding.mapView.invalidate()
         }
@@ -384,7 +433,6 @@ class MapFragment : Fragment() {
         // ---------------------------------------------------------
         // 6. NUOVO: BOTTONE "X" PER PULIRE LA MAPPA (Modalità Zen)
         // ---------------------------------------------------------
-        // SOSTITUISCI "NOME_DEL_TUO_BOTTONE_X" CON L'ID REALE DEL TUO BOTTONE DAL FILE XML (es. btnChiudi, btnX)
         binding.btnTerminaSosta.setOnClickListener {
             // Invertiamo lo stato
             isMappaPulita = !isMappaPulita

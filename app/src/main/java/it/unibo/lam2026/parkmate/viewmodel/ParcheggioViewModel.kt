@@ -72,12 +72,17 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
                         costoCalcolato = vecchiaSessione.tariffa
                     } else {
                         val millisecondiTrascorsi = tempoAttuale - vecchiaSessione.startTimeStamp
-                        val oreTrascorse = millisecondiTrascorsi.toDouble() / (1000.0 * 60.0 * 60.0)
-                        costoCalcolato = oreTrascorse * vecchiaSessione.tariffa
 
-                        // Trucco di test: se passano meno di 5 minuti addebitiamo un'ora intera
-                        if (oreTrascorse < 0.08) costoCalcolato = vecchiaSessione.tariffa
+                        // 1. Troviamo i minuti esatti (con i decimali)
+                        val minutiTrascorsi = millisecondiTrascorsi.toDouble() / (1000.0 * 60.0)
 
+                        // 2. Calcoliamo quanto costa 1 singolo minuto
+                        val costoAlMinuto = vecchiaSessione.tariffa / 60.0
+
+                        // 3. Moltiplichiamo i minuti per il costo al minuto
+                        costoCalcolato = minutiTrascorsi * costoAlMinuto
+
+                        // Arrotondiamo ai classici 2 decimali (es. 1.45€)
                         costoCalcolato = Math.round(costoCalcolato * 100.0) / 100.0
                     }
                 }
@@ -196,11 +201,14 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
                     if (sessione.tipoParcheggio.contains("Fiss", ignoreCase = true)) {
                         costoCalcolato = sessione.tariffa
                     } else {
+                        // LA NOSTRA NUOVA MATEMATICA AL MINUTO
                         val millisecondiTrascorsi = tempoDiFine - sessione.startTimeStamp
-                        val oreTrascorse = millisecondiTrascorsi.toDouble() / (1000.0 * 60.0 * 60.0)
-                        costoCalcolato = oreTrascorse * sessione.tariffa
+                        val minutiTrascorsi = millisecondiTrascorsi.toDouble() / (1000.0 * 60.0)
+                        val costoAlMinuto = sessione.tariffa / 60.0
 
-                        if (oreTrascorse < 0.08) costoCalcolato = sessione.tariffa
+                        costoCalcolato = minutiTrascorsi * costoAlMinuto
+
+                        // Arrotondamento ai centesimi
                         costoCalcolato = Math.round(costoCalcolato * 100.0) / 100.0
                     }
                 }

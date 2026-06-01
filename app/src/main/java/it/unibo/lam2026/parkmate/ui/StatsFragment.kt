@@ -231,7 +231,7 @@ class StatsFragment : Fragment() {
             val cerchio = Polygon(binding.mapViewStats).apply {
                 id = "heatmap_circle"
                 // [MODIFICATO] Raggio più piccolo: 50 metri invece di 150
-                points = Polygon.pointsAsCircle(ultimoPunto, 50.0)
+                points = Polygon.pointsAsCircle(ultimoPunto, 200.0)
 
                 // [MODIFICATO] Colore rosso leggermente più opaco (Hex: 30)
                 fillColor = android.graphics.Color.parseColor("#30FF0000")

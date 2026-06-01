@@ -6,14 +6,16 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels // 👇 IMPORTANTE: Aggiunto per condividere il ViewModel dei parcheggi
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import it.unibo.lam2026.parkmate.R
 import it.unibo.lam2026.parkmate.databinding.FragmentVehiclesBinding
 import it.unibo.lam2026.parkmate.model.AppDatabase
 import it.unibo.lam2026.parkmate.model.VeicoloRepository
+import it.unibo.lam2026.parkmate.viewmodel.ParcheggioViewModel // 👇 IMPORTANTE: Aggiunto import
 import it.unibo.lam2026.parkmate.viewmodel.VeicoliViewModel
-import it.unibo.lam2026.parkmate.viewmodel.VeicoliViewModelFactory // Creeremo questa Factory a breve
+import it.unibo.lam2026.parkmate.viewmodel.VeicoliViewModelFactory
 
 class VehiclesFragment : Fragment() {
 
@@ -21,6 +23,9 @@ class VehiclesFragment : Fragment() {
     private val binding get() = _binding!!
     private lateinit var viewModel: VeicoliViewModel
     private lateinit var adapter: VeicoloAdapter
+
+    // 👇 NUOVO: Recuperiamo il ParcheggioViewModel condiviso a livello di Activity 👇
+    private val parcheggioViewModel: ParcheggioViewModel by activityViewModels()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentVehiclesBinding.inflate(inflater, container, false)
@@ -34,28 +39,39 @@ class VehiclesFragment : Fragment() {
         val dao = AppDatabase.getDatabase(requireContext()).veicoloDao()
         val repository = VeicoloRepository(dao)
 
-        // 2. Inizializziamo il ViewModel
+        // 2. Inizializziamo il ViewModel dei Veicoli
         val factory = VeicoliViewModelFactory(repository)
         viewModel = ViewModelProvider(this, factory)[VeicoliViewModel::class.java]
 
         // 3. Prepariamo il LayoutManager della lista
         binding.recyclerViewVeicoli.layoutManager = LinearLayoutManager(requireContext())
 
-        // 4. OSSERVIAMO IL DATABASE: Qui dentro 'veicoli' prende vita!
-        viewModel.listaVeicoli.observe(viewLifecycleOwner) { veicoli ->
+        // 👇 MODIFICA ARCHITETTURALE: Creiamo l'adapter una volta sola (all'inizio vuoto) 👇
+        adapter = VeicoloAdapter(
+            listaVeicoli = emptyList(),
+            onEliminaClick = { veicoloDaEliminare ->
+                viewModel.rimuoviVeicolo(veicoloDaEliminare.id)
+            },
+            onModificaClick = { veicoloDaModificare ->
+                mostraDialogModifica(veicoloDaModificare)
+            }
+        )
+        // Attacchiamo subito l'Adapter alla RecyclerView
+        binding.recyclerViewVeicoli.adapter = adapter
 
-            // Creiamo l'Adapter usando i dati appena arrivati dal DB
-            adapter = VeicoloAdapter(
-                listaVeicoli = veicoli,
-                onEliminaClick = { veicoloDaEliminare ->
-                    viewModel.rimuoviVeicolo(veicoloDaEliminare.id)
-                },
-                onModificaClick = { veicoloDaModificare ->
-                    mostraDialogModifica(veicoloDaModificare)
-                }
-            )
-            // Attacchiamo l'Adapter alla RecyclerView
-            binding.recyclerViewVeicoli.adapter = adapter
+        // 4. OSSERVIAMO IL DATABASE DEI VEICOLI: aggiorna la lista quando i dati cambiano
+        viewModel.listaVeicoli.observe(viewLifecycleOwner) { veicoli ->
+            // Usiamo il metodo aggiornaDati per non distruggere e ricreare l'oggetto adapter
+            adapter.aggiornaDati(veicoli)
+        }
+
+        // 👇 NUOVO: OSSERVIAMO I PARCHEGGI ATTIVI PER ACCENDERE LA "P" 👇
+        parcheggioViewModel.parcheggiAttivi.observe(viewLifecycleOwner) { listaParcheggi ->
+            // Estraiamo la lista testuale dei veicoli attualmente parcheggiati ("Nome (Tipo)")
+            val nomiMacchineParcheggiate = listaParcheggi.map { it.veicoloNome }
+
+            // Passiamo la lista all'adapter che accenderà le P corrispondenti!
+            adapter.aggiornaStatoParcheggi(nomiMacchineParcheggiate)
         }
 
         // 5. Bottone '+' per aggiungere un nuovo veicolo
@@ -66,13 +82,12 @@ class VehiclesFragment : Fragment() {
         // 6. Diciamo al ViewModel di caricare i dati la prima volta
         viewModel.caricaVeicoli()
     }
+
     private fun mostraDialogAggiuntaVeicolo() {
-        // 1. Carichiamo (inflate) il layout XML che abbiamo appena creato
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_aggiungi_veicolo, null)
         val editNome = dialogView.findViewById<android.widget.EditText>(R.id.editNomeVeicolo)
         val spinnerTipo = dialogView.findViewById<android.widget.Spinner>(R.id.spinnerTipoVeicolo)
 
-        // 2. Prepariamo i dati per lo Spinner (la tendina)
         val tipiVeicolo = arrayOf("Auto", "Moto", "Bici")
         val spinnerAdapter = android.widget.ArrayAdapter(
             requireContext(),
@@ -81,31 +96,26 @@ class VehiclesFragment : Fragment() {
         )
         spinnerTipo.adapter = spinnerAdapter
 
-        // 3. Costruiamo e mostriamo l'AlertDialog di Google Material
         com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
             .setTitle("Nuovo Veicolo")
             .setView(dialogView)
             .setPositiveButton("Salva") { dialog, _ ->
-                // Quando l'utente preme "Salva", recuperiamo i dati
                 val nomeInserito = editNome.text.toString().trim()
                 val tipoSelezionato = spinnerTipo.selectedItem.toString()
 
-                // ALERT ERRORE COMUNE: Mai fidarsi dell'utente! Controlliamo che il nome non sia vuoto
                 if (nomeInserito.isNotEmpty()) {
-                    // Creiamo l'oggetto Veicolo (id=0 perché Room lo genera da solo!)
                     val nuovoVeicolo = it.unibo.lam2026.parkmate.model.Veicolo(
                         nome = nomeInserito,
                         tipo = tipoSelezionato
                     )
 
-                    // Lo passiamo al ViewModel che lo salverà nel Database!
                     viewModel.aggiungiVeicolo(nuovoVeicolo)
                     Toast.makeText(requireContext(), "Veicolo salvato!", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(requireContext(), "Inserisci un nome valido!", Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton("Annulla", null) // Se preme annulla, si chiude da solo
+            .setNegativeButton("Annulla", null)
             .show()
     }
 
@@ -119,12 +129,10 @@ class VehiclesFragment : Fragment() {
         val editNome = dialogView.findViewById<android.widget.EditText>(R.id.editNomeVeicolo)
         val spinnerTipo = dialogView.findViewById<android.widget.Spinner>(R.id.spinnerTipoVeicolo)
 
-        // Setup dello spinner (Stesse opzioni che usi per aggiungerlo)
         val tipi = arrayOf("Auto", "Moto", "Bici")
         val arrayAdapter = android.widget.ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, tipi)
         spinnerTipo.adapter = arrayAdapter
 
-        // --- PRE-COMPILIAMO I CAMPI ---
         editNome.setText(veicoloDaModificare.nome)
         val posizioneTipo = tipi.indexOf(veicoloDaModificare.tipo)
         if (posizioneTipo >= 0) spinnerTipo.setSelection(posizioneTipo)
@@ -137,15 +145,14 @@ class VehiclesFragment : Fragment() {
                 val tipoSelezionato = spinnerTipo.selectedItem.toString()
 
                 if (nomeInserito.isNotEmpty()) {
-                    // Creiamo il nuovo oggetto PASSANDO IL VECCHIO ID!
                     val veicoloAggiornato = it.unibo.lam2026.parkmate.model.Veicolo(
-                        id = veicoloDaModificare.id, // Fondamentale per dire al DB "sovrascrivi questo"
+                        id = veicoloDaModificare.id,
                         nome = nomeInserito,
                         tipo = tipoSelezionato
                     )
 
                     viewModel.aggiornaVeicolo(veicoloAggiornato)
-                    android.widget.Toast.makeText(requireContext(), "Veicolo aggiornato!", android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "Veicolo aggiornato!", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Annulla", null)
