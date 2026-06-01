@@ -193,7 +193,7 @@ class StatsFragment : Fragment() {
 
         // 3. Impacchettiamo i dati (DataSet)
         val dataSet = BarDataSet(entries, "Numero di soste")
-        dataSet.color = resources.getColor(android.R.color.holo_blue_light, null)
+        dataSet.color = android.graphics.Color.parseColor("#9C27B0")
         dataSet.valueTextSize = 12f
 
         // 4. Consegniamo i dati al grafico

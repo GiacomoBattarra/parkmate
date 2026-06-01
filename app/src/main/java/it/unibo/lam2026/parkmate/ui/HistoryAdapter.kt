@@ -1,10 +1,11 @@
 package it.unibo.lam2026.parkmate.ui
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import it.unibo.lam2026.parkmate.model.SessioneParcheggio
-import it.unibo.lam2026.parkmate.databinding.ItemHistoryBinding // <-- Ho aggiunto questo import!
+import it.unibo.lam2026.parkmate.databinding.ItemHistoryBinding
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -33,26 +34,36 @@ class HistoryAdapter(
         val formattaData = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
         val dataInizio = formattaData.format(Date(sessione.startTimeStamp))
 
-        // Mostriamo o nascondiamo i bottoni in base allo stato del parcheggio
-        if (sessione.endTimeStamp == null || sessione.isAttivo) {
-            // PARCHEGGIO IN CORSO
+        // CONTROLLO STATO: ATTIVO vs TERMINATO
+        if (sessione.isAttivo) {
+            // --- PARCHEGGIO IN CORSO ---
             holder.binding.tvHistoryTime.text = "Orario: $dataInizio - In corso"
-            holder.binding.btnTerminaParcheggio.visibility = android.view.View.VISIBLE
+            holder.binding.btnTerminaParcheggio.visibility = View.VISIBLE
+            holder.binding.btnEliminaParcheggio.visibility = View.GONE
 
-            // Nascondiamo il cestino perché non si può eliminare una sosta attiva!
-            holder.binding.btnEliminaParcheggio.visibility = android.view.View.GONE
+            // Diciamo all'utente che stiamo conteggiando il costo
+            holder.binding.tvHistoryCost.text = "Costo: Calcolo al termine..."
 
         } else {
-            // PARCHEGGIO TERMINATO
-            val dataFine = formattaData.format(java.util.Date(sessione.endTimeStamp!!))
+            // --- PARCHEGGIO TERMINATO ---
+            val dataFine = if (sessione.endTimeStamp != null) formattaData.format(Date(sessione.endTimeStamp)) else "N/A"
             holder.binding.tvHistoryTime.text = "Orario: $dataInizio - $dataFine"
-            holder.binding.btnTerminaParcheggio.visibility = android.view.View.GONE
+            holder.binding.btnTerminaParcheggio.visibility = View.GONE
+            holder.binding.btnEliminaParcheggio.visibility = View.VISIBLE
 
-            // Mostriamo il cestino solo ora che la sosta è chiusa!
-            holder.binding.btnEliminaParcheggio.visibility = android.view.View.VISIBLE
+            // Se è chiuso, mostriamo il costo. Se è 0, mostriamo la parola "Gratis"!
+            if (sessione.costoTotale != null) {
+                if (sessione.costoTotale == 0.0) {
+                    holder.binding.tvHistoryCost.text = "Costo: Gratis"
+                } else {
+                    holder.binding.tvHistoryCost.text = String.format(Locale.getDefault(), "Costo: €%.2f", sessione.costoTotale)
+                }
+            } else {
+                holder.binding.tvHistoryCost.text = "Costo: N/A"
+            }
         }
 
-        // Quando l'utente preme il bottone, lanciamo l'evento verso il Fragment
+        // AZIONI DEI BOTTONI
         holder.binding.btnTerminaParcheggio.setOnClickListener {
             onTerminaClick(sessione)
         }
@@ -60,13 +71,10 @@ class HistoryAdapter(
             onEliminaClick(sessione)
         }
 
-        holder.binding.tvHistoryLocation.text = "Coordinate: ${sessione.latitudine}, ${sessione.longitudine}"
-
-        if (sessione.costoTotale != null && sessione.costoTotale > 0.0) {
-            holder.binding.tvHistoryCost.text = String.format("Costo: €%.2f", sessione.costoTotale)
-        } else {
-            holder.binding.tvHistoryCost.text = "Costo: N/A"
-        }
+        // Arrotondiamo le coordinate per non avere numeri lunghissimi
+        val latCorta = String.format(Locale.getDefault(), "%.4f", sessione.latitudine)
+        val lonCorta = String.format(Locale.getDefault(), "%.4f", sessione.longitudine)
+        holder.binding.tvHistoryLocation.text = "Coordinate: $latCorta, $lonCorta"
     }
 
     override fun getItemCount(): Int = storicoList.size

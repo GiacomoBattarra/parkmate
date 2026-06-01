@@ -41,4 +41,18 @@ class ParcheggioRepository(private val dao: ParcheggioDao) {
             dao.eliminaParcheggio(sessionId)
         }
     }
+
+    // 6. [NUOVO] Peschiamo il singolo parcheggio per calcolare i costi nel ViewModel
+    suspend fun getParcheggioById(sessionId: Long): SessioneParcheggio? {
+        return withContext(Dispatchers.IO) {
+            dao.getParcheggioById(sessionId)
+        }
+    }
+
+    // 7. [NUOVO] Recupera un eventuale parcheggio attivo per un veicolo specifico
+    suspend fun getParcheggioAttivoPerVeicolo(nomeVeicolo: String): SessioneParcheggio? {
+        return withContext(Dispatchers.IO) {
+            dao.getParcheggioAttivoPerVeicolo(nomeVeicolo)
+        }
+    }
 }
