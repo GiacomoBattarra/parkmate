@@ -5,26 +5,78 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.asLiveData
 import it.unibo.lam2026.parkmate.model.SessioneParcheggio
 import it.unibo.lam2026.parkmate.model.ParcheggioRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class MainViewModel(private val repository: ParcheggioRepository) : ViewModel() {
 
-    // 1. Il Flow diventa LiveData per il Fragment
+    // 1. La lista reattiva per la mappa
     val listaParcheggi = repository.parcheggiAttivi.asLiveData()
 
-    // 2. Aggiunta della funzione per terminare il parcheggio
-    fun terminaParcheggio(sessionId: Long) {
-        val tempoAttuale = System.currentTimeMillis()
-        // Qui calcoliamo il costo (es. 2.50 euro fissi per test)
-        val costoCalcolato = 2.50
+    // ------------------------------------------------------------------------
+    // [NUOVA FUNZIONE] DA USARE QUANDO SALVI UN NUOVO PARCHEGGIO DAL BOTTOM SHEET
+    // ------------------------------------------------------------------------
+    fun avviaNuovoParcheggio(nuovaSessione: SessioneParcheggio) {
+        viewModelScope.launch(Dispatchers.IO) {
 
-        viewModelScope.launch {
-            repository.chiudiParcheggio(sessionId, tempoAttuale, costoCalcolato)
+            // 1. Controlliamo se questa macchina è già parcheggiata da qualche altra parte
+            val vecchiaSessione = repository.getParcheggioAttivoPerVeicolo(nuovaSessione.veicoloNome)
+
+            // 2. Se sì, la chiudiamo in automatico salvando la tariffa!
+            if (vecchiaSessione != null) {
+                terminaParcheggioSincrono(vecchiaSessione)
+            }
+
+            // 3. Ora che la vecchia sosta è chiusa, inseriamo quella nuova pulita
+            repository.inserisciParcheggio(nuovaSessione)
         }
     }
 
+    // ------------------------------------------------------------------------
+    // FUNZIONE STANDARD (Chiamata quando premi "Termina Sosta" sulla mappa)
+    // ------------------------------------------------------------------------
+    fun terminaParcheggio(sessionId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val sessione = repository.getParcheggioById(sessionId)
+            if (sessione != null) {
+                terminaParcheggioSincrono(sessione)
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // LOGICA MATEMATICA (Usata da entrambe le funzioni qui sopra per non ripetere codice)
+    // ------------------------------------------------------------------------
+    private suspend fun terminaParcheggioSincrono(sessione: SessioneParcheggio) {
+        val tempoAttuale = System.currentTimeMillis()
+        var costoCalcolato = 0.0
+
+        if (sessione.tariffa > 0.0) {
+            if (sessione.tipoParcheggio.contains("Fiss", ignoreCase = true)) {
+                costoCalcolato = sessione.tariffa
+            } else {
+                val millisecondiTrascorsi = tempoAttuale - sessione.startTimeStamp
+                val oreTrascorse = millisecondiTrascorsi.toDouble() / (1000.0 * 60.0 * 60.0)
+
+                costoCalcolato = oreTrascorse * sessione.tariffa
+
+                // Trucco per test: se sono passati meno di 5 minuti, arrotondiamo a 1 ora
+                if (oreTrascorse < 0.08) {
+                    costoCalcolato = sessione.tariffa
+                }
+
+                // Arrotondamento ai centesimi
+                costoCalcolato = Math.round(costoCalcolato * 100.0) / 100.0
+            }
+        }
+
+        // Salviamo nel DB!
+        repository.chiudiParcheggio(sessione.id, tempoAttuale, costoCalcolato)
+    }
+
+    // (La tua funzione di test)
     fun aggiungiParcheggioDiTest() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val nuovo = SessioneParcheggio(
                 veicoloNome = "Mia Auto",
                 tipoParcheggio = "Libero",
@@ -32,7 +84,7 @@ class MainViewModel(private val repository: ParcheggioRepository) : ViewModel() 
                 longitudine = 11.3428,
                 startTimeStamp = System.currentTimeMillis()
             )
-            repository.inserisciParcheggio(nuovo)
+            avviaNuovoParcheggio(nuovo) // Usiamo la nuova funzione anche qui!
         }
     }
 }

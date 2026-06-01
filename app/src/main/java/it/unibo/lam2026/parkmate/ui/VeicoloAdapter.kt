@@ -5,6 +5,7 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import it.unibo.lam2026.parkmate.databinding.ItemVeicoloBinding
 import it.unibo.lam2026.parkmate.model.Veicolo
+import it.unibo.lam2026.parkmate.R
 
 class VeicoloAdapter(
     private var listaVeicoli: List<Veicolo>,
@@ -27,9 +28,9 @@ class VeicoloAdapter(
 
         // Gestione icone
         when (veicoloAttuale.tipo.lowercase()) {
-            "auto" -> holder.binding.imgTipoVeicolo.setImageResource(android.R.drawable.ic_dialog_map)
-            "moto" -> holder.binding.imgTipoVeicolo.setImageResource(android.R.drawable.ic_menu_directions)
-            "bici" -> holder.binding.imgTipoVeicolo.setImageResource(android.R.drawable.ic_menu_compass)
+            "auto" -> holder.binding.imgTipoVeicolo.setImageResource(R.drawable.ic_car)
+            "moto" -> holder.binding.imgTipoVeicolo.setImageResource(R.drawable.ic_motorcycle)
+            "bici" -> holder.binding.imgTipoVeicolo.setImageResource(R.drawable.ic_bike)
         }
 
         // Click sul Cestino

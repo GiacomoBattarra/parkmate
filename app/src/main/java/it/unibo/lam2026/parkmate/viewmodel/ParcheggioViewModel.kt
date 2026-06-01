@@ -1,6 +1,7 @@
 package it.unibo.lam2026.parkmate.viewmodel
 
 import android.app.Application
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
@@ -8,6 +9,7 @@ import it.unibo.lam2026.parkmate.model.AppDatabase
 import it.unibo.lam2026.parkmate.model.SessioneParcheggio
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
@@ -20,72 +22,106 @@ import it.unibo.lam2026.parkmate.utils.ParkingSessionWorker
 
 class ParcheggioViewModel(application: Application) : AndroidViewModel(application) {
 
-    // Prendiamo il riferimento al DAO passando per il Database
     private val dao = AppDatabase.getDatabase(application).parcheggioDao()
 
-    // Lo storico mostrerà solo i parcheggi attivi (grazie alla modifica al DAO con archiviato = 0)
     val storicoParcheggi = dao.getStoricoParcheggi().asLiveData()
-
-    // Espone i parcheggi attivi alla Mappa in modo reattivo
     val parcheggiAttivi = dao.getParcheggiAttivi().asLiveData()
-
-    // [NUOVO]: Espone TUTTI i parcheggi (anche quelli nascosti/archiviato = 1) alla schermata delle Statistiche
     val statisticheGlobaliParcheggi = dao.getTuttiIParcheggiPerStats().asLiveData()
 
-    fun salvaParcheggio(nomeVeicolo: String, tipo: String, lat: Double, lon: Double, tariffa: Double = 0.0, scadenzaTimestamp: Long? = null, nota: String? = null, fotoPath: String? = null) {
-        // 1. Creiamo l'oggetto da salvare
+    fun salvaParcheggio(
+        nomeVeicolo: String,
+        tipo: String,
+        lat: Double,
+        lon: Double,
+        tariffa: Double = 0.0,
+        scadenzaTimestamp: Long? = null,
+        nota: String? = null,
+        fotoPath: String? = null
+    ) {
+        val tempoAttuale = System.currentTimeMillis()
+
         val nuovaSessione = SessioneParcheggio(
             veicoloNome = nomeVeicolo,
             tipoParcheggio = tipo,
             latitudine = lat,
             longitudine = lon,
-            startTimeStamp = System.currentTimeMillis(),
+            startTimeStamp = tempoAttuale,
             tariffa = tariffa,
             scadenzaTimestamp = scadenzaTimestamp,
             nota = nota,
             fotoPath = fotoPath
         )
 
-        // 2. Salviamo nel database
+        // GESTIONE DOPPIONI E SALVATAGGIO IN BACKGROUND
         viewModelScope.launch(Dispatchers.IO) {
+
+            // A. Cerchiamo se la macchina è già parcheggiata altrove
+            val vecchiaSessione = dao.getParcheggioAttivoPerVeicolo(nomeVeicolo)
+
+            // B. Se sì, la chiudiamo in automatico per tutti i casi (Libero, Fisso, Orario)
+            if (vecchiaSessione != null) {
+                var costoCalcolato = 0.0
+
+                // Calcolo solo se c'è una tariffa (Fissa o Oraria)
+                if (vecchiaSessione.tariffa > 0.0) {
+                    if (vecchiaSessione.tipoParcheggio.contains("Fiss", ignoreCase = true)) {
+                        costoCalcolato = vecchiaSessione.tariffa
+                    } else {
+                        val millisecondiTrascorsi = tempoAttuale - vecchiaSessione.startTimeStamp
+                        val oreTrascorse = millisecondiTrascorsi.toDouble() / (1000.0 * 60.0 * 60.0)
+                        costoCalcolato = oreTrascorse * vecchiaSessione.tariffa
+
+                        // Trucco di test: se passano meno di 5 minuti addebitiamo un'ora intera
+                        if (oreTrascorse < 0.08) costoCalcolato = vecchiaSessione.tariffa
+
+                        costoCalcolato = Math.round(costoCalcolato * 100.0) / 100.0
+                    }
+                }
+
+                // Chiudiamo il vecchio parcheggio nel database
+                dao.chiudiParcheggio(vecchiaSessione.id, tempoAttuale, costoCalcolato)
+
+                // --- NUOVO: MOSTRA L'AVVISO ALL'UTENTE ---
+                // Dobbiamo spostarci sul Thread Principale (Main) per mostrare roba grafica
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        getApplication(),
+                        "Sosta precedente di '$nomeVeicolo' terminata in automatico.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+
+            // C. Salviamo la nuova sosta
             dao.inserisciParcheggio(nuovaSessione)
         }
 
-        // 3. Impostiamo l'allarme se c'è una scadenza
+        // Impostiamo l'allarme se c'è una scadenza
         if (scadenzaTimestamp != null) {
             impostaAllarmeScadenza(nomeVeicolo, scadenzaTimestamp)
         }
 
-        // 4. Avviamo il worker se è a pagamento orario
+        // Avviamo il worker se è a pagamento orario
         if (tipo.contains("Orario")) {
-            val workRequest = androidx.work.PeriodicWorkRequestBuilder<it.unibo.lam2026.parkmate.utils.ParkingSessionWorker>(15, java.util.concurrent.TimeUnit.MINUTES)
+            val workRequest = PeriodicWorkRequestBuilder<ParkingSessionWorker>(15, TimeUnit.MINUTES)
                 .addTag("SESSION_${nuovaSessione.veicoloNome}")
                 .build()
 
-            androidx.work.WorkManager.getInstance(getApplication()).enqueue(workRequest)
+            WorkManager.getInstance(getApplication()).enqueue(workRequest)
         }
     }
 
-    /**
-     * Sfrutta l'AlarmManager di Android per programmare una notifica in futuro,
-     * che suonerà anche se l'app è completamente chiusa.
-     */
     private fun impostaAllarmeScadenza(veicoloNome: String, scadenzaTimestamp: Long) {
-        // Otteniamo i servizi di sistema di Android
         val context = getApplication<Application>().applicationContext
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-        // Prepariamo il pacco (Intent) da spedire al nostro ParkingAlarmReceiver
         val intent = Intent(context, ParkingAlarmReceiver::class.java).apply {
             putExtra("VEICOLO", veicoloNome)
             putExtra("MESSAGGIO", "Attenzione! Il ticket per $veicoloNome scadrà a breve!")
         }
 
-        // Generiamo un ID univoco per questo allarme (così possiamo averne attivi anche 10 contemporaneamente)
         val requestCode = System.currentTimeMillis().toInt()
 
-        // Il PendingIntent è un Intent che diamo in mano al sistema Android da usare "più tardi"
-        // FLAG_IMMUTABLE è un requisito obbligatorio per la sicurezza da Android 12 in poi
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             requestCode,
@@ -93,45 +129,51 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Calcoliamo quando far suonare la notifica: 10 MINUTI PRIMA della scadenza
         val dieciMinutiMs = 10 * 60 * 1000
         var tempoSveglia = scadenzaTimestamp - dieciMinutiMs
 
-        // Se l'utente ha impostato una sosta brevissima (es. 5 minuti totali),
-        // il preavviso di 10 minuti sarebbe nel passato. In quel caso, suoniamo alla scadenza esatta.
         if (tempoSveglia <= System.currentTimeMillis()) {
             tempoSveglia = scadenzaTimestamp
         }
 
         try {
-            // setExactAndAllowWhileIdle spara l'allarme al secondo spaccato,
-            // perfino se il telefono è bloccato in tasca (Doze mode)
             alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
                 tempoSveglia,
                 pendingIntent
             )
         } catch (e: SecurityException) {
-            // Se su Android 14 l'utente ha tolto i permessi manualmente,
-            // catturiamo l'errore per non far crashare l'app.
             e.printStackTrace()
         }
     }
 
-    // Funzione per terminare un parcheggio attivo
     fun terminaParcheggio(sessionId: Long) {
-        val tempoDiFine = System.currentTimeMillis()
-
         viewModelScope.launch(Dispatchers.IO) {
-            // AGGIUNTO: , 0.0 come parametro del costo
-            dao.chiudiParcheggio(sessionId, tempoDiFine, 0.0)
-            
+            val tempoDiFine = System.currentTimeMillis()
+            val sessione = dao.getParcheggioById(sessionId)
+
+            if (sessione != null) {
+                var costoCalcolato = 0.0
+
+                if (sessione.tariffa > 0.0) {
+                    if (sessione.tipoParcheggio.contains("Fiss", ignoreCase = true)) {
+                        costoCalcolato = sessione.tariffa
+                    } else {
+                        val millisecondiTrascorsi = tempoDiFine - sessione.startTimeStamp
+                        val oreTrascorse = millisecondiTrascorsi.toDouble() / (1000.0 * 60.0 * 60.0)
+                        costoCalcolato = oreTrascorse * sessione.tariffa
+
+                        if (oreTrascorse < 0.08) costoCalcolato = sessione.tariffa
+                        costoCalcolato = Math.round(costoCalcolato * 100.0) / 100.0
+                    }
+                }
+                dao.chiudiParcheggio(sessionId, tempoDiFine, costoCalcolato)
+            }
+
             WorkManager.getInstance(getApplication()).cancelAllWork()
         }
     }
 
-    // Il tasto cancella dello storico ora non elimina più fisicamente dal DB,
-    // ma chiama "archiviaParcheggio" per nasconderlo dallo storico ma mantenerlo nelle statistiche!
     fun cancellaParcheggio(sessionId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.archiviaParcheggio(sessionId)
