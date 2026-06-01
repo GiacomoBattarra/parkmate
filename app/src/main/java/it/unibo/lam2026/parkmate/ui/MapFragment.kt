@@ -32,6 +32,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import org.osmdroid.views.overlay.Polygon
+
 class MapFragment : Fragment() {
 
     private var _binding: FragmentMapBinding? = null
@@ -42,9 +43,12 @@ class MapFragment : Fragment() {
     private var isSelectingLocation = false
     private var isSelectingFavorite = false
 
-    // NUOVE VARIABILI PER LA MODIFICA
+    // Variabili per la modifica
     private var isEditingFavorite = false
     private var locationBeingEdited: PosizioneSalvata? = null
+
+    // --- NUOVO: Memoria per sapere se la mappa è pulita (invisibile) o normale ---
+    private var isMappaPulita = false
 
     private lateinit var viewModel: MainViewModel
     private val posizioniViewModel: PosizioniSalvateViewModel by viewModels()
@@ -90,17 +94,43 @@ class MapFragment : Fragment() {
             if (!lista.isNullOrEmpty()) {
                 val sostaAttiva = lista[0]
                 binding.btnTerminaSosta.visibility = View.VISIBLE
-                binding.btnTerminaSosta.setOnClickListener {
-                    viewModel.terminaParcheggio(sostaAttiva.id)
-                    Toast.makeText(requireContext(), "Parcheggio terminato!", Toast.LENGTH_SHORT).show()
-                }
 
                 for (parcheggio in lista) {
                     val segnaposto = org.osmdroid.views.overlay.Marker(binding.mapView)
                     segnaposto.id = "PARCHEGGIO"
                     segnaposto.position = org.osmdroid.util.GeoPoint(parcheggio.latitudine, parcheggio.longitudine)
                     segnaposto.title = "🚗 ${parcheggio.veicoloNome}"
-                    java.lang.String.valueOf(parcheggio.tipoParcheggio).also { segnaposto.snippet = it }
+
+                    // --- [NUOVO] CALCOLO TEMPO E COSTI IN TEMPO REALE ---
+                    val formattaData = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                    val oraInizio = formattaData.format(java.util.Date(parcheggio.startTimeStamp))
+
+                    val tempoAttuale = System.currentTimeMillis()
+                    val elapsedMillis = tempoAttuale - parcheggio.startTimeStamp
+                    val ore = java.util.concurrent.TimeUnit.MILLISECONDS.toHours(elapsedMillis)
+                    val minuti = java.util.concurrent.TimeUnit.MILLISECONDS.toMinutes(elapsedMillis) % 60
+                    val tempoTrascorso = "${ore}h ${minuti}m"
+
+                    var costoTesto = "Gratis"
+                    if (parcheggio.tariffa > 0.0) {
+                        if (parcheggio.tipoParcheggio.contains("Fiss", ignoreCase = true)) {
+                            costoTesto = String.format(java.util.Locale.getDefault(), "€%.2f (Fisso)", parcheggio.tariffa)
+                        } else {
+                            val oreDecimali = elapsedMillis.toDouble() / (1000.0 * 60.0 * 60.0)
+                            val costoCalc = oreDecimali * parcheggio.tariffa
+                            costoTesto = String.format(java.util.Locale.getDefault(), "€%.2f", costoCalc)
+                        }
+                    }
+
+                    // Creiamo il testo compatto con tutte le nuove info
+                    val infoDettagliate = "${parcheggio.tipoParcheggio}\n🕒 Inizio: $oraInizio | ⏳ Trascorso: $tempoTrascorso\n💰 Costo Attuale: $costoTesto"
+
+                    // Assegnamo temporaneamente il testo (verrà poi aggiornato con l'indirizzo)
+                    segnaposto.snippet = infoDettagliate
+                    // -----------------------------------------------------
+
+                    // Se la mappa è attualmente "pulita", rendiamo il nuovo marker subito trasparente
+                    if (isMappaPulita) segnaposto.setAlpha(0.0f)
 
                     segnaposto.relatedObject = parcheggio.id
                     segnaposto.infoWindow = ParkInfoWindow(binding.mapView) { idSessione ->
@@ -109,6 +139,9 @@ class MapFragment : Fragment() {
                     }
 
                     segnaposto.setOnMarkerClickListener { marker, mapView ->
+                        // --- NUOVO: Blocca i click fantasma se la mappa è pulita ---
+                        if (isMappaPulita) return@setOnMarkerClickListener true
+
                         if (marker.isInfoWindowOpen) marker.closeInfoWindow()
                         else {
                             org.osmdroid.views.overlay.infowindow.InfoWindow.closeAllInfoWindowsOn(mapView)
@@ -132,7 +165,8 @@ class MapFragment : Fragment() {
                                 } else addr.getAddressLine(0)
 
                                 withContext(Dispatchers.Main) {
-                                    segnaposto.snippet = "${parcheggio.tipoParcheggio}\n📍 $indirizzoPulito"
+                                    // Aggiungiamo l'indirizzo in fondo al nostro snippet dettagliato
+                                    segnaposto.snippet = "$infoDettagliate\n📍 $indirizzoPulito"
                                     if (segnaposto.isInfoWindowOpen) {
                                         segnaposto.closeInfoWindow()
                                         segnaposto.showInfoWindow()
@@ -157,7 +191,6 @@ class MapFragment : Fragment() {
         val posizioniAdapter = PosizioniSalvateAdapter(
             posizioni = emptyList(),
 
-            // AZIONE 1: Tocco il nome -> Sposto la mappa
             onPosizioneClick = { posizioneSalvata ->
                 val mapController = binding.mapView.controller
                 mapController.animateTo(org.osmdroid.util.GeoPoint(posizioneSalvata.latitudine, posizioneSalvata.longitudine))
@@ -166,21 +199,16 @@ class MapFragment : Fragment() {
                 binding.headerLuoghiSalvati.text = "I tuoi luoghi salvati ▼"
             },
 
-            // AZIONE 2: Tocco la MATITA -> Entro in Modalità Modifica Posizione
             onEditClick = { posizioneSalvata ->
-                // Chiude la tendina
                 binding.recyclerPosizioniSalvate.visibility = View.GONE
                 binding.headerLuoghiSalvati.text = "I tuoi luoghi salvati ▼"
 
-                // Salviamo quale luogo stiamo modificando e cambiamo modalità
                 isEditingFavorite = true
                 locationBeingEdited = posizioneSalvata
 
-                // Facciamo comparire il bersaglio e cambiamo il bottone in basso a destra
                 binding.imgCenterPin.visibility = View.VISIBLE
                 binding.fabAggiungiPosizione.setImageResource(android.R.drawable.ic_menu_save)
 
-                // Spostiamo la mappa sulle VECCHIE coordinate, per far ripartire l'utente da lì
                 val mapController = binding.mapView.controller
                 mapController.animateTo(org.osmdroid.util.GeoPoint(posizioneSalvata.latitudine, posizioneSalvata.longitudine))
 
@@ -189,7 +217,6 @@ class MapFragment : Fragment() {
                 if (::myLocationOverlay.isInitialized) myLocationOverlay.disableFollowLocation()
             },
 
-            // AZIONE 3: Tocco il CESTINO -> Pop up di Conferma Eliminazione
             onDeleteClick = { posizioneSalvata ->
                 android.app.AlertDialog.Builder(requireContext())
                     .setTitle("Elimina luogo")
@@ -219,9 +246,15 @@ class MapFragment : Fragment() {
                 icona?.setTint(android.graphics.Color.RED)
                 markerCuore.icon = icona
 
+                // Se la mappa è attualmente "pulita", rendiamo il cuore subito trasparente
+                if (isMappaPulita) markerCuore.setAlpha(0.0f)
+
                 markerCuore.setAnchor(org.osmdroid.views.overlay.Marker.ANCHOR_CENTER, org.osmdroid.views.overlay.Marker.ANCHOR_BOTTOM)
 
                 markerCuore.setOnMarkerClickListener { marker, _ ->
+                    // --- NUOVO: Blocca i click fantasma se la mappa è pulita ---
+                    if (isMappaPulita) return@setOnMarkerClickListener true
+
                     if (marker.isInfoWindowOpen) marker.closeInfoWindow() else marker.showInfoWindow()
                     true
                 }
@@ -252,7 +285,7 @@ class MapFragment : Fragment() {
 
                 isSelectingLocation = false
                 binding.imgCenterPin.visibility = View.GONE
-                binding.btnParkHere.setImageResource(android.R.drawable.ic_menu_mylocation)
+                binding.btnParkHere.setImageResource(R.drawable.ic_parking)
             }
         }
 
@@ -278,10 +311,10 @@ class MapFragment : Fragment() {
                 val currentGeoPoint = binding.mapView.mapCenter as GeoPoint
                 isEditingFavorite = false
                 binding.imgCenterPin.visibility = View.GONE
-                binding.fabAggiungiPosizione.setImageResource(android.R.drawable.ic_input_add)
+                binding.fabAggiungiPosizione.setImageResource(R.drawable.ic_heart)
 
                 val campoTesto = android.widget.EditText(requireContext())
-                campoTesto.setText(locationBeingEdited?.nome) // Precompila con il vecchio nome
+                campoTesto.setText(locationBeingEdited?.nome)
 
                 android.app.AlertDialog.Builder(requireContext())
                     .setTitle("Conferma Modifica")
@@ -290,7 +323,6 @@ class MapFragment : Fragment() {
                     .setPositiveButton("Aggiorna") { dialog, _ ->
                         val nomeInserito = campoTesto.text.toString()
                         if (nomeInserito.isNotBlank() && locationBeingEdited != null) {
-                            // Copiamo l'oggetto aggiornando NOME e nuove COORDINATE
                             val posizioneAggiornata = locationBeingEdited!!.copy(
                                 nome = nomeInserito,
                                 latitudine = currentGeoPoint.latitude,
@@ -308,7 +340,7 @@ class MapFragment : Fragment() {
                     .setOnCancelListener { locationBeingEdited = null }
                     .show()
 
-                return@setOnClickListener // Esci per non far partire l'aggiunta di un nuovo luogo
+                return@setOnClickListener
             }
 
             // --- FASE DI AGGIUNTA NUOVO LUOGO (+) ---
@@ -324,7 +356,7 @@ class MapFragment : Fragment() {
 
                 isSelectingFavorite = false
                 binding.imgCenterPin.visibility = View.GONE
-                binding.fabAggiungiPosizione.setImageResource(android.R.drawable.ic_input_add)
+                binding.fabAggiungiPosizione.setImageResource(R.drawable.ic_heart)
 
                 val campoTesto = android.widget.EditText(requireContext())
                 campoTesto.hint = "Es. Casa, Palestra, Lavoro..."
@@ -347,6 +379,38 @@ class MapFragment : Fragment() {
                     .setNegativeButton("Annulla") { dialog, _ -> dialog.dismiss() }
                     .show()
             }
+        }
+
+        // ---------------------------------------------------------
+        // 6. NUOVO: BOTTONE "X" PER PULIRE LA MAPPA (Modalità Zen)
+        // ---------------------------------------------------------
+        // SOSTITUISCI "NOME_DEL_TUO_BOTTONE_X" CON L'ID REALE DEL TUO BOTTONE DAL FILE XML (es. btnChiudi, btnX)
+        binding.btnTerminaSosta.setOnClickListener {
+            // Invertiamo lo stato
+            isMappaPulita = !isMappaPulita
+
+            // Scorriamo tutti gli elementi sulla mappa
+            for (overlay in binding.mapView.overlays) {
+                if (overlay is org.osmdroid.views.overlay.Marker) {
+                    // Troviamo i nostri parcheggi e i nostri preferiti
+                    if (overlay.id == "PARCHEGGIO" || overlay.id == "PREFERITO") {
+                        if (isMappaPulita) {
+                            overlay.setAlpha(0.0f) // Li facciamo sparire
+                            overlay.closeInfoWindow() // Chiudiamo eventuali fumetti aperti
+                        } else {
+                            overlay.setAlpha(1.0f) // Li facciamo ricomparire
+                        }
+                    }
+                }
+            }
+
+            // Messaggio per far capire all'utente cosa è successo
+            if (isMappaPulita) {
+                Toast.makeText(requireContext(), "Mappa pulita. Clicca la X di nuovo per mostrare tutto.", Toast.LENGTH_SHORT).show()
+            }
+
+            // Aggiorniamo la grafica
+            binding.mapView.invalidate()
         }
     }
 
