@@ -62,6 +62,12 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
         val latReale = arguments?.getDouble("LATITUDINE") ?: 0.0
         val lonReale = arguments?.getDouble("LONGITUDINE") ?: 0.0
 
+        // --- NUOVO: Teniamo in memoria i parcheggi attivi per controllare i doppioni! ---
+        var parcheggiInCorso: List<it.unibo.lam2026.parkmate.model.SessioneParcheggio> = emptyList()
+        viewModel.parcheggiAttivi.observe(viewLifecycleOwner) { lista ->
+            parcheggiInCorso = lista
+        }
+
         // 2. REVERSE GEOCODING (Traduzione Coordinate -> Indirizzo) in Background
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -77,8 +83,14 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
                     }
                 }
             } catch (e: Exception) {
+                // Ritorno sul thread principale per aggiornare la grafica
                 withContext(Dispatchers.Main) {
-                    binding.tvAddress.text = "📍 Lat: $latReale, Lon: $lonReale"
+                    // Arrotondiamo le coordinate a 4 decimali per non avere una sbrodolata di numeri sullo schermo
+                    val latCorta = String.format(java.util.Locale.getDefault(), "%.4f", latReale)
+                    val lonCorta = String.format(java.util.Locale.getDefault(), "%.4f", lonReale)
+
+                    // Mostriamo il messaggio amichevole con le coordinate!
+                    binding.tvAddress.text = "📍 Non riesco a caricare l'indirizzo (Coord: $latCorta, $lonCorta)"
                 }
             }
         }
@@ -133,7 +145,7 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
         }
 
         // -------------------------------------------------------------------------
-        // 5. SALVATAGGIO DEI DATI
+        // 5. SALVATAGGIO DEI DATI (Con avviso di sovrascrittura!)
         // -------------------------------------------------------------------------
         binding.btnConfirmPark.setOnClickListener {
             val selectedVehicle = binding.spinnerVehicles.selectedItem?.toString() ?: ""
@@ -149,17 +161,14 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
 
             // Analizziamo cosa ha scelto l'utente e leggiamo i numeri
             when (binding.radioGroupParkType.checkedRadioButtonId) {
-
                 binding.radioFree.id -> {
                     parkingType = "Libero"
                 }
-
                 binding.radioHourly.id -> {
                     parkingType = "A pagamento (Orario)"
                     val inputTariffa = binding.etHourlyTariff.text.toString()
                     tariffaFinale = if (inputTariffa.isNotEmpty()) inputTariffa.toDouble() else 0.0
                 }
-
                 binding.radioFixed.id -> {
                     parkingType = "Ticket Fisso"
                     val inputCosto = binding.etFixedCost.text.toString()
@@ -169,7 +178,6 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
                     val minuti = if (inputMinuti.isNotEmpty()) inputMinuti.toLong() else 0L
 
                     if (minuti > 0) {
-                        // Calcolo timestamp: ORA + (minuti scelti in millisecondi)
                         scadenzaStimata = System.currentTimeMillis() + (minuti * 60 * 1000)
                     } else {
                         Toast.makeText(requireContext(), "Inserisci una durata valida in minuti!", Toast.LENGTH_SHORT).show()
@@ -182,23 +190,46 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
                 }
             }
 
-            // [NUOVO] Leggiamo la nota scritta dall'utente (se c'è)
-            val notaInserita = binding.etNotaParcheggio.text.toString().takeIf { it.isNotBlank() }
+            // --- NUOVA LOGICA: Controllo Sovrascrittura ---
 
-            // Chiamata finale al ViewModel con i NUOVI parametri
-            viewModel.salvaParcheggio(
-                nomeVeicolo = selectedVehicle,
-                tipo = parkingType,
-                lat = latReale,
-                lon = lonReale,
-                tariffa = tariffaFinale,
-                scadenzaTimestamp = scadenzaStimata,
-                nota = notaInserita,              // <--- AGGIUNTO
-                fotoPath = percorsoFotoAssoluto   // <--- AGGIUNTO
-            )
+            // 1. Controlliamo se il veicolo è già parcheggiato guardando la nostra lista aggiornata
+            val isAlreadyParked = parcheggiInCorso.any { it.veicoloNome == selectedVehicle }
 
-            Toast.makeText(requireContext(), "Parcheggio iniziato!", Toast.LENGTH_SHORT).show()
-            dismiss()
+            // 2. Creiamo una "mini-funzione" con il salvataggio vero e proprio
+            val eseguiSalvataggio = {
+                val notaInserita = binding.etNotaParcheggio.text.toString().takeIf { it.isNotBlank() }
+
+                viewModel.salvaParcheggio(
+                    nomeVeicolo = selectedVehicle,
+                    tipo = parkingType,
+                    lat = latReale,
+                    lon = lonReale,
+                    tariffa = tariffaFinale,
+                    scadenzaTimestamp = scadenzaStimata,
+                    nota = notaInserita,
+                    fotoPath = percorsoFotoAssoluto
+                )
+                Toast.makeText(requireContext(), "Parcheggio iniziato!", Toast.LENGTH_SHORT).show()
+                dismiss() // Chiude il BottomSheet
+            }
+
+            // 3. Decidiamo cosa fare
+            if (isAlreadyParked) {
+                // L'auto è già parcheggiata: mostriamo il pop-up di conferma!
+                com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("⚠️ Veicolo già in sosta!")
+                    .setMessage("Attenzione: '$selectedVehicle' risulta già parcheggiato altrove.\n\nVuoi terminare la sosta precedente e iniziarne una nuova qui?")
+                    .setPositiveButton("Sì, sostituisci") { _, _ ->
+                        eseguiSalvataggio() // L'utente conferma, andiamo avanti
+                    }
+                    .setNegativeButton("No, annulla") { dialog, _ ->
+                        dialog.dismiss() // L'utente rifiuta, chiudiamo solo l'avviso e non facciamo nulla!
+                    }
+                    .show()
+            } else {
+                // L'auto è libera: salviamo direttamente senza fastidiosi pop-up
+                eseguiSalvataggio()
+            }
         }
 
         // --- CLICK SUL BOTTONE FOTOCAMERA ---
@@ -245,4 +276,6 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
 
         return fileImmagine
     }
+
+
 }
