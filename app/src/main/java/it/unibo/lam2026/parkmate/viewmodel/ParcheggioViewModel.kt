@@ -66,7 +66,7 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
             if (vecchiaSessione != null) {
                 var costoCalcolato = 0.0
 
-                // Calcolo solo se c'è una tariffa (Fissa o Oraria)
+                // Calcolo solo se c'è una tariffa (Fissa od Oraria)
                 if (vecchiaSessione.tariffa > 0.0) {
                     if (vecchiaSessione.tipoParcheggio.contains("Fiss", ignoreCase = true)) {
                         costoCalcolato = vecchiaSessione.tariffa
@@ -112,7 +112,8 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
 
         // Avviamo il worker se è a pagamento orario
         if (tipo.contains("Orario")) {
-            val workRequest = PeriodicWorkRequestBuilder<ParkingSessionWorker>(15, TimeUnit.MINUTES)
+            // [MODIFICATO] Cambiamo l'intervallo da 15 minuti a 1 ora!
+            val workRequest = PeriodicWorkRequestBuilder<ParkingSessionWorker>(1, TimeUnit.HOURS)
                 .addTag("SESSION_${nuovaSessione.veicoloNome}")
                 .build()
 
@@ -213,9 +214,8 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
                     }
                 }
                 dao.chiudiParcheggio(sessionId, tempoDiFine, costoCalcolato)
+                WorkManager.getInstance(getApplication()).cancelAllWorkByTag("SESSION_${sessione.veicoloNome}")
             }
-
-            WorkManager.getInstance(getApplication()).cancelAllWork()
         }
     }
 
