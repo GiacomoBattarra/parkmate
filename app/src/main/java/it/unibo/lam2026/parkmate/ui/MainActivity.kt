@@ -24,7 +24,8 @@ import it.unibo.lam2026.parkmate.utils.ActivityTransitionReceiver
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-
+    // Rendi il navController globale per poterlo usare fuori da onCreate
+    private lateinit var navController: androidx.navigation.NavController
     // Launcher esistente per le notifiche
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -55,24 +56,47 @@ class MainActivity : AppCompatActivity() {
 
         val navHostFragment = supportFragmentManager
             .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
-        val navController = navHostFragment.navController
+        navController = navHostFragment.navController
 
         binding.bottomNavigation.setupWithNavController(navController)
 
+        // Selezioniamo il PRIMO pulsante (la Mappa) invece dell'intera barra
+        val tabMappa = binding.bottomNavigation.findViewById<android.view.View>(binding.bottomNavigation.menu.getItem(0).itemId)
+
+        tabMappa.setOnLongClickListener {
+            Log.d("ParkMate_Debug", "Trigger segreto attivato! Simulo il sensore di sosta.")
+
+            val sharedPrefs = getSharedPreferences("ParkMatePrefs", android.content.Context.MODE_PRIVATE)
+            sharedPrefs.edit()
+                .putLong("KEY_DISCESA_AUTO_TIMESTAMP", System.currentTimeMillis() - (1 * 60 * 1000))
+                .apply()
+
+            val fintoIntentSensore = Intent(this, ActivityTransitionReceiver::class.java)
+            sendBroadcast(fintoIntentSensore)
+
+            true // Obbligatorio per consumare il long click
+        }
+
         // Facciamo partire la catena dei permessi all'avvio
         chiediPermessoNotifiche()
-        // [NUOVO] Controlliamo se l'app è stata aperta dalla notifica di sosta
+        //Controlliamo se l'app è stata aperta dalla notifica di sosta
         gestisciIntentNotifica(intent)
     }
 
-    // [NUOVO] Intercetta il flag della notifica e mostra il BottomSheet
+    // Reindirizza l'utente sulla mappa invece di aprire subito il pannello
     private fun gestisciIntentNotifica(intent: Intent?) {
         if (intent != null && intent.getBooleanExtra("APRI_SCHERMO_PARCHEGGIO", false)) {
-            Log.d("ParkMate", "Notifica cliccata! Mostro il BottomSheet di sosta.")
+            Log.d("ParkMate", "Notifica cliccata! Reindirizzo sulla mappa.")
 
-            // Istanziamo e mostriamo direttamente il vostro frammento grafico esistente
-            val bottomSheet = ParkBottomSheetFragment()
-            bottomSheet.show(supportFragmentManager, "ParkBottomSheetFragment")
+            // Sfruttiamo il navController che ora è globale!
+            try {
+                navController.navigate(R.id.mapFragment)
+            } catch (e: Exception) {
+                Log.e("ParkMate", "Errore navigazione: ${e.message}")
+            }
+
+            // [FONDAMENTALE] Rimuovi il flag per evitare bug ruotando lo schermo
+            intent.removeExtra("APRI_SCHERMO_PARCHEGGIO")
         }
     }
 
