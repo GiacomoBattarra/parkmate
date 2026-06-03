@@ -19,14 +19,16 @@ class HistoryViewModel(private val repository: ParcheggioRepository) : ViewModel
         )
 
     // Funzione per terminare una sosta attiva
-    fun terminaParcheggio(sessionId: Long) {
+    fun terminaParcheggio(sessionId: Long, veicoloNome: String, context: android.content.Context) {
         // Calcoliamo il tempo attuale in millisecondi
         val tempoDiFine = System.currentTimeMillis()
 
         // Apriamo la coroutine per fare l'aggiornamento in background senza bloccare l'app
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            // AGGIUNTO: , 0.0 come parametro del costo
             repository.chiudiParcheggio(sessionId, tempoDiFine, 0.0)
+
+            // AGGIUNTO: Fermiamo le notifiche periodiche per questo specifico veicolo!
+            androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag("SESSION_$veicoloNome")
         }
     }
 }

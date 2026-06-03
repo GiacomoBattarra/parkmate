@@ -25,6 +25,6 @@ data class SessioneParcheggio(
     @ColumnInfo(name = "archiviato") val archiviato: Boolean = false,
     // CAMPI PER NOTIFICHE E CALCOLI
     val tariffa: Double = 0.0,
-    val scadenzaTimestamp: Long? = null
-
+    val scadenzaTimestamp: Long? = null,
+    val parkingEffortScore: Int? = null  // Colonna specifica per il Parking Effort Score (Punteggio da 1 a 5)
 )

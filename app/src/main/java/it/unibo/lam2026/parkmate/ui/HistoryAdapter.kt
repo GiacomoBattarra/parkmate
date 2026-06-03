@@ -72,15 +72,19 @@ class HistoryAdapter(
             onEliminaClick(sessione)
         }
 
-        // Mostriamo un testo di caricamento
+// ========================================================================
+        // 1. COMPONENTE GEOLOCALIZZAZIONE (Traduzione coordinate in indirizzo via)
+        // ========================================================================
+        // Mostriamo provvisoriamente un testo di caricamento sulla card
         holder.binding.tvHistoryLocation.text = "📍 Ricerca indirizzo in corso..."
 
-        // Lanciamo un processo in background per tradurre le coordinate
+        // Lanciamo un processo asincrono in background per non bloccare la lista scorrevole
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             try {
                 val geocoder = android.location.Geocoder(holder.itemView.context, Locale.getDefault())
                 val indirizzi = geocoder.getFromLocation(sessione.latitudine, sessione.longitudine, 1)
 
+                // Ritorniamo sul Thread Principale (Main) per aggiornare la grafica dell'interfaccia
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     if (!indirizzi.isNullOrEmpty()) {
                         val addr = indirizzi[0]
@@ -88,7 +92,7 @@ class HistoryAdapter(
                         val civico = addr.subThoroughfare ?: ""
                         val citta = addr.locality ?: ""
 
-                        // Formattiamo l'indirizzo in modo pulito
+                        // Formattiamo l'indirizzo stradale in modo pulito ed elegante
                         val indirizzoPulito = if (via.isNotEmpty() && citta.isNotEmpty()) {
                             if (civico.isNotEmpty()) "$via $civico, $citta" else "$via, $citta"
                         } else {
@@ -97,20 +101,41 @@ class HistoryAdapter(
 
                         holder.binding.tvHistoryLocation.text = "📍 $indirizzoPulito"
                     } else {
-                        // Fallback in caso di via non trovata
+                        // Fallback: se il geocoder non trova la via, stampiamo le coordinate corte
                         val latCorta = String.format(Locale.getDefault(), "%.4f", sessione.latitudine)
                         val lonCorta = String.format(Locale.getDefault(), "%.4f", sessione.longitudine)
                         holder.binding.tvHistoryLocation.text = "📍 Coord: $latCorta, $lonCorta"
                     }
                 }
             } catch (e: Exception) {
-                // Fallback in caso di assenza di rete internet
+                // Fallback di emergenza: ad esempio se il telefono del professore è offline (senza internet)
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     val latCorta = String.format(Locale.getDefault(), "%.4f", sessione.latitudine)
                     val lonCorta = String.format(Locale.getDefault(), "%.4f", sessione.longitudine)
                     holder.binding.tvHistoryLocation.text = "📍 Coord: $latCorta, $lonCorta"
                 }
             }
+        }
+
+        // ========================================================================
+        // 2. COMPONENTE PARKING EFFORT SCORE (Visualizzazione delle stelline di sforzo)
+        // ========================================================================
+        if (sessione.parkingEffortScore != null) {
+            holder.binding.tvHistoryEffort.visibility = View.VISIBLE
+
+            // Invertiamo la logica UX: il valore più basso (1) ha il massimo delle stelle (5)!
+            val valutazioneVisuale = when (sessione.parkingEffortScore) {
+                1 -> "⭐⭐⭐⭐⭐ (Ottimo - Sforzo Minimo)" // Meno di 2 min a piedi
+                2 -> "⭐⭐⭐⭐ (Buono)"                 // Tra 2 e 5 min a piedi
+                3 -> "⭐⭐⭐ (Medio)"                   // Tra 5 e 10 min a piedi
+                4 -> "⭐⭐ (Elevato)"                  // Tra 10 e 20 min a piedi
+                5 -> "⭐ (Critico - Sforzo Massimo)"   // Oltre 20 min a piedi
+                else -> ""
+            }
+            holder.binding.tvHistoryEffort.text = "Valutazione Sosta: $valutazioneVisuale"
+        } else {
+            // Nascondiamo la riga per i vecchi parcheggi sprovvisti di score automatico
+            holder.binding.tvHistoryEffort.visibility = View.GONE
         }
     }
 
