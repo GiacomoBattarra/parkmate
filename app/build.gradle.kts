@@ -5,11 +5,7 @@ plugins {
 
 android {
     namespace = "it.unibo.lam2026.parkmate"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "it.unibo.lam2026.parkmate"
