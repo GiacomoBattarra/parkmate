@@ -26,5 +26,7 @@ data class SessioneParcheggio(
     // CAMPI PER NOTIFICHE E CALCOLI
     val tariffa: Double = 0.0,
     val scadenzaTimestamp: Long? = null,
-    val parkingEffortScore: Int? = null  // Colonna specifica per il Parking Effort Score (Punteggio da 1 a 5)
+    val parkingEffortScore: Int? = null,  // Colonna specifica per il Parking Effort Score (Punteggio da 1 a 5)
+    val distanzaPiediMetri: Float? = null,
+    val durataPiediSecondi: Long? = null
 )

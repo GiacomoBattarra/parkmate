@@ -22,6 +22,7 @@ import it.unibo.lam2026.parkmate.model.VeicoloRepository
 import it.unibo.lam2026.parkmate.viewmodel.ParcheggioViewModel
 import it.unibo.lam2026.parkmate.viewmodel.VeicoliViewModel
 import it.unibo.lam2026.parkmate.viewmodel.VeicoliViewModelFactory
+import it.unibo.lam2026.parkmate.utils.PedestrianTrackingService
 
 class ParkBottomSheetFragment : BottomSheetDialogFragment() {
 
@@ -209,6 +210,10 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
                     nota = notaInserita,
                     fotoPath = percorsoFotoAssoluto
                 )
+                // AVVIO IL MOTORE DI TRACCIAMENTO CAMMINATA (Spostato qui dentro!)
+                val serviceIntent = android.content.Intent(requireContext(), PedestrianTrackingService::class.java)
+                androidx.core.content.ContextCompat.startForegroundService(requireContext(), serviceIntent)
+
                 Toast.makeText(requireContext(), "Parcheggio iniziato!", Toast.LENGTH_SHORT).show()
                 dismiss() // Chiude il BottomSheet
             }

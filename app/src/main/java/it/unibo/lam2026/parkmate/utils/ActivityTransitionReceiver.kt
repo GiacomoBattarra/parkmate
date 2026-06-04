@@ -24,6 +24,10 @@ class ActivityTransitionReceiver : BroadcastReceiver() {
             val result = ActivityTransitionResult.extractResult(intent) ?: return
 
             for (event in result.transitionEvents) {
+
+                // ==========================================================
+                // CASO 1: L'UTENTE SCENDE DALL'AUTO (Inizia il parcheggio)
+                // ==========================================================
                 if (event.activityType == DetectedActivity.IN_VEHICLE &&
                     event.transitionType == com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_EXIT) {
 
@@ -33,6 +37,20 @@ class ActivityTransitionReceiver : BroadcastReceiver() {
                     sharedPrefs.edit().putLong("KEY_DISCESA_AUTO_TIMESTAMP", System.currentTimeMillis()).apply()
 
                     inviaNotificaSosta(context)
+                }
+                // ==========================================================
+                // CASO 2 : L'UTENTE È ARRIVATO A DESTINAZIONE (Fermo)
+                // ==========================================================
+                if (event.activityType == DetectedActivity.STILL &&
+                    event.transitionType == com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER) {
+
+                    Log.d("ParkMate_AR", "Arrivo rilevato (STILL). Fermo il tracciamento della camminata.")
+
+                    // Mandiamo il segnale di STOP al nostro servizio
+                    val stopIntent = Intent(context, it.unibo.lam2026.parkmate.utils.PedestrianTrackingService::class.java).apply {
+                        action = "STOP_TRACKING"
+                    }
+                    context.startService(stopIntent)
                 }
             }
         } else {

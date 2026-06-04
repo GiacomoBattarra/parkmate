@@ -134,8 +134,14 @@ class MainActivity : AppCompatActivity() {
             .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_EXIT) // <-- Cambiato qui!
             .build()
 
-        // Creiamo la lista delle transizioni da osservare (nel nostro caso ne basta una)
-        val request = ActivityTransitionRequest(listOf(transizioneUscitaAuto))
+        // Utente che si ferma (Arrivo a destinazione)
+        val transizioneFermo = ActivityTransition.Builder()
+            .setActivityType(DetectedActivity.STILL)
+            .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER) // ENTER = inizia a stare fermo
+            .build()
+
+        // Passiamo ENTRAMBE le regole a Google
+        val request = ActivityTransitionRequest(listOf(transizioneUscitaAuto, transizioneFermo))
 
         // Prepariamo l'intent per svegliare il Receiver creato nello Step 2
         val intent = Intent(this, ActivityTransitionReceiver::class.java)
