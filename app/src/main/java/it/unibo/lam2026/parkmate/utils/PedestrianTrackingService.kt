@@ -120,48 +120,55 @@ class PedestrianTrackingService : Service() {
     }
 
     private fun fermaTracciamento() {
-        // 1. Fermiamo il GPS per non consumare batteria
+        // 1. CONTROLLO DI SICUREZZA ANTI-CRASH
+        // Se non abbiamo mai inizializzato la lettura GPS, significa che il tracking non era mai partito.
+        if (!::locationCallback.isInitialized) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return // Usciamo subito senza provare a salvare nel database!
+        }
+
+        // 2. Fermiamo il GPS per non consumare batteria
         fusedLocationClient.removeLocationUpdates(locationCallback)
 
-        // 2. Calcoliamo i secondi effettivi
+        // 3. Calcoliamo i secondi effettivi
         val durataSecondi = (System.currentTimeMillis() - timestampInizioCamminata) / 1000
 
-        val dao = AppDatabase.getDatabase(applicationContext).parcheggioDao()
+        val dao = it.unibo.lam2026.parkmate.model.AppDatabase.getDatabase(applicationContext).parcheggioDao()
 
         // Apriamo il thread di background per salvare
-        CoroutineScope(Dispatchers.IO).launch {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             try {
+                // Usiamo .first() preso in prestito da kotlinx.coroutines.flow.first
                 val parcheggiAttivi = dao.getParcheggiAttivi().first()
 
                 if (parcheggiAttivi.isNotEmpty()) {
                     val parcheggioCorrente = parcheggiAttivi[0]
 
-                    // --- CALCOLO DELLO SFORZO DA 1 A 5 IN BASE AL TEMPO (Come da consegna!) ---
+                    // Calcolo score
                     val calcoloScore = when {
-                        durataSecondi < 120 -> 1   // Meno di 2 minuti -> Ottimo (1)
-                        durataSecondi < 300 -> 2   // Sotto i 5 minuti -> Buono (2)
-                        durataSecondi < 600 -> 3   // Sotto i 10 minuti -> Medio (3)
-                        durataSecondi < 1200 -> 4  // Sotto i 20 minuti -> Elevato (4)
-                        else -> 5                  // Oltre i 20 minuti -> Critico/Pessimo (5)
+                        durataSecondi < 120 -> 1
+                        durataSecondi < 300 -> 2
+                        durataSecondi < 600 -> 3
+                        durataSecondi < 1200 -> 4
+                        else -> 5
                     }
 
-                    // Salviamo tutto: i metadati grezzi e il voto finale
                     val parcheggioAggiornato = parcheggioCorrente.copy(
                         distanzaPiediMetri = distanzaTotaleMetri,
                         durataPiediSecondi = durataSecondi,
-                        parkingEffortScore = calcoloScore // <-- IL DATO CHE DA' VITA ALLA MAPPA!
+                        parkingEffortScore = calcoloScore
                     )
                     dao.inserisciParcheggio(parcheggioAggiornato)
 
-                    // ECCO IL LOG CHE CERCHIAMO!
-                    Log.d("ParkMate_Effort", "Salvato su ${parcheggioCorrente.veicoloNome}! Metri: $distanzaTotaleMetri | Secondi: $durataSecondi")
+                    Log.d("ParkMate_Effort", "Salvato su ${parcheggioCorrente.veicoloNome}! Metri: $distanzaTotaleMetri | Secondi: $durataSecondi | Score: $calcoloScore")
                 } else {
-                    Log.e("ParkMate_Effort", "Errore: Nessun parcheggio attivo a cui assegnare i dati.")
+                    Log.e("ParkMate_Effort", "Nessun parcheggio attivo a cui assegnare i dati.")
                 }
             } catch (e: Exception) {
                 Log.e("ParkMate_Effort", "Errore DB: ${e.message}")
             } finally {
-                // 3. SPEGNIAMO IL SERVIZIO SOLO DOPO AVER SALVATO I DATI! (Spostato qui dentro)
+                // SPEGNIAMO IL SERVIZIO SOLO DOPO AVER SALVATO I DATI!
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
