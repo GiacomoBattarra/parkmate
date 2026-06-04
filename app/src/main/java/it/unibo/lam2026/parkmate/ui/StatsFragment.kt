@@ -6,10 +6,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import it.unibo.lam2026.parkmate.databinding.FragmentStatsBinding
-import it.unibo.lam2026.parkmate.model.SessioneParcheggio // 1. IMPORT REALE AGGIORNATO!
+import it.unibo.lam2026.parkmate.model.SessioneParcheggio
 import it.unibo.lam2026.parkmate.viewmodel.ParcheggioViewModel
 import java.util.Calendar
 import com.github.mikephil.charting.data.BarEntry
@@ -23,6 +24,7 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.overlay.Polygon
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import android.graphics.Color
 
 class StatsFragment : Fragment() {
 
@@ -34,10 +36,16 @@ class StatsFragment : Fragment() {
     // 2. Usiamo la classe corretta: SessioneParcheggio
     private var listaCompletaParcheggi: List<SessioneParcheggio> = emptyList()
 
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // IMPORTANTISSIMO: Inizializza la configurazione di osmdroid con il contesto dell'app
+        Configuration.getInstance().load(
+            requireContext(),
+            androidx.preference.PreferenceManager.getDefaultSharedPreferences(requireContext())
+        )
+    }
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentStatsBinding.inflate(inflater, container, false)
         return binding.root
     }
@@ -52,13 +60,17 @@ class StatsFragment : Fragment() {
         binding.spinnerTimeFilter.adapter = adapterSpinner
 
         // --- CONFIGURAZIONE MAPPA HEATMAP ---
-        Configuration.getInstance().load(requireContext(), PreferenceManager.getDefaultSharedPreferences(requireContext()))
-
+        // 1. Forziamo esplicitamente la sorgente delle mappe (Standard)
+        binding.mapViewStats.setTileSource(org.osmdroid.tileprovider.tilesource.TileSourceFactory.MAPNIK)
         binding.mapViewStats.setMultiTouchControls(true)
-        binding.mapViewStats.controller.setZoom(14.0) // Zoom iniziale
+        binding.mapViewStats.controller.setZoom(15.0)
+
+        // 2. Impostiamo un centro di default (es. Bologna)
+        // Se non lo facciamo, prima di scaricare i dati la mappa parte in mezzo all'oceano (sfondo grigio!)
+        binding.mapViewStats.controller.setCenter(org.osmdroid.util.GeoPoint(44.4949, 11.3426))
 
         // IL TRUCCO DELLO SFONDO NEUTRO: Togliamo i colori alla mappa!
-        val colorMatrix = ColorMatrix()
+       val colorMatrix = ColorMatrix()
         colorMatrix.setSaturation(0f) // 0 = Bianco e nero puro!
         val filter = ColorMatrixColorFilter(colorMatrix)
         binding.mapViewStats.overlayManager.tilesOverlay.setColorFilter(filter)
@@ -91,7 +103,8 @@ class StatsFragment : Fragment() {
 
                         // Aggiorniamo contemporaneamente Grafico e Mappa solo con i dati filtrati!
                         impostaGrafico(listaFiltrata)
-                        disegnaHeatmap(listaFiltrata)
+                        // disegnaHeatmap(listaFiltrata)
+                        disegnaMappaSforzoDinamica(listaFiltrata)
 
                         // Chiamiamo la funzione passandogli la stessa lista filtrata!
                         aggiornaCardParkingEffort(listaFiltrata)
@@ -220,32 +233,78 @@ class StatsFragment : Fragment() {
         binding.barChartSoste.invalidate()
     }
 
-    private fun disegnaHeatmap(listaParcheggi: List<SessioneParcheggio>) {
-        binding.mapViewStats.overlays.removeAll { it is Polygon && it.id == "heatmap_circle" }
+    // Funzione per ottenere la chiave della cella (griglia 200m x 200m)
+    private fun getGridKey(lat: Double, lon: Double, cellSizeDeg: Double = 0.002): String {
+        val gridLat = (lat / cellSizeDeg).toInt()
+        val gridLon = (lon / cellSizeDeg).toInt()
+        return "$gridLat,$gridLon"
+    }
 
-        var ultimoPunto: GeoPoint? = null
+    // Calcola lo score medio per ogni cella a partire dalla lista dei parcheggi
+    private fun calcolaScoreMedioPerCella(lista: List<SessioneParcheggio>): Map<String, Double> {
+        val perCella = mutableMapOf<String, MutableList<Int>>()
+        for (sessione in lista) {
+            val score = sessione.parkingEffortScore ?: continue
+            val key = getGridKey(sessione.latitudine, sessione.longitudine)
+            perCella.getOrPut(key) { mutableListOf() }.add(score)
+        }
+        return perCella.mapValues { (_, scores) -> scores.average() }
+    }
 
-        for (sosta in listaParcheggi) {
-            ultimoPunto = GeoPoint(sosta.latitudine, sosta.longitudine)
+    // Restituisce il colore in base allo score medio (verde = score basso, rosso = score alto)
+    private fun colorePerScore(avgScore: Double): Int {
+        val ratio = ((avgScore - 1) / 4.0).coerceIn(0.0, 1.0)
+        val red = (255 * ratio).toInt()
+        val green = (255 * (1 - ratio)).toInt()
+        return Color.argb(180, red, green, 0) // semi-trasparente
+    }
 
-            val cerchio = Polygon(binding.mapViewStats).apply {
-                id = "heatmap_circle"
-                // [MODIFICATO] Raggio più piccolo: 50 metri invece di 150
-                points = Polygon.pointsAsCircle(ultimoPunto, 200.0)
+    private fun disegnaMappaSforzoDinamica(listaParcheggi: List<SessioneParcheggio>) {
+        // 1. Puliamo i vecchi disegni
+        binding.mapViewStats.overlays.removeAll { it is org.osmdroid.views.overlay.Polygon && it.id == "effort_circle" }
 
-                // [MODIFICATO] Colore rosso leggermente più opaco (Hex: 30)
-                fillColor = android.graphics.Color.parseColor("#30FF0000")
+        // 2. Filtriamo solo i parcheggi che hanno effettivamente uno score calcolato
+        val sessioniConScore = listaParcheggi.filter { it.parkingEffortScore != null }
+
+        if (sessioniConScore.isEmpty()) {
+            Toast.makeText(requireContext(), "Nessun dato di sforzo disponibile", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        var ultimoCentro: GeoPoint? = null
+
+        for (sosta in sessioniConScore) {
+            val score = sosta.parkingEffortScore!!
+            ultimoCentro = GeoPoint(sosta.latitudine, sosta.longitudine)
+
+            // 3. Scegliamo il colore in base allo sforzo (1 = Verde/Ottimo, 5 = Rosso/Pessimo)
+            // Usiamo "40" all'inizio dell'esadecimale per dare un'opacità del 25% circa.
+            // Quando i cerchi si sovrappongono, il colore diventerà più intenso!
+            val coloreHex = when(score) {
+                1 -> "#404CAF50" // Verde
+                2 -> "#408BC34A" // Verde chiaro
+                3 -> "#40FFEB3B" // Giallo
+                4 -> "#40FF9800" // Arancione
+                5 -> "#40F44336" // Rosso
+                else -> "#409E9E9E" // Grigio default
+            }
+
+            val cerchio = org.osmdroid.views.overlay.Polygon(binding.mapViewStats).apply {
+                id = "effort_circle"
+                // Creiamo un cerchio di 150 metri di raggio
+                points = org.osmdroid.views.overlay.Polygon.pointsAsCircle(ultimoCentro, 150.0)
+                fillColor = android.graphics.Color.parseColor(coloreHex)
                 strokeColor = android.graphics.Color.TRANSPARENT
                 strokeWidth = 0f
             }
+
             binding.mapViewStats.overlays.add(cerchio)
         }
 
-        // Se c'è almeno un parcheggio, centriamo la mappa su quello
-        if (ultimoPunto != null) {
-            binding.mapViewStats.controller.setCenter(ultimoPunto)
+        // Centriamo la mappa sull'ultimo parcheggio registrato
+        if (ultimoCentro != null) {
+            binding.mapViewStats.controller.animateTo(ultimoCentro)
         }
-
         binding.mapViewStats.invalidate()
     }
 
@@ -288,6 +347,18 @@ class StatsFragment : Fragment() {
             else -> "Che fatica! Giri un po' troppo prima di fermarti. 🚗💨"
         }
         binding.tvParkingScoreComment.text = commentoDinamico
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Sveglia la mappa e forza il caricamento dei tasselli grafici
+        binding.mapViewStats.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Mette in pausa il download per evitare memory leak
+        binding.mapViewStats.onPause()
     }
 
 }

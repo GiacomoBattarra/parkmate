@@ -56,6 +56,9 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
             parkingEffortScore = scoreCalcolato // [NUOVO] Passiamo il punteggio alla colonna del DB!
         )
 
+        //Cancella eventuali worker residui per questo veicolo (evita duplicati)
+        WorkManager.getInstance(getApplication()).cancelAllWorkByTag("SESSION_$nomeVeicolo")
+
         // GESTIONE DOPPIONI E SALVATAGGIO IN BACKGROUND
         viewModelScope.launch(Dispatchers.IO) {
 
@@ -112,7 +115,6 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
 
         // Avviamo il worker se è a pagamento orario
         if (tipo.contains("Orario")) {
-            // [MODIFICATO] Cambiamo l'intervallo da 15 minuti a 1 ora!
             val workRequest = PeriodicWorkRequestBuilder<ParkingSessionWorker>(1, TimeUnit.HOURS)
                 .addTag("SESSION_${nuovaSessione.veicoloNome}")
                 .build()

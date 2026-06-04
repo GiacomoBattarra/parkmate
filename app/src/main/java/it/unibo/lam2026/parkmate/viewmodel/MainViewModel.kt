@@ -84,7 +84,8 @@ class MainViewModel(private val repository: ParcheggioRepository) : ViewModel() 
                 tipoParcheggio = "Libero",
                 latitudine = 44.4939,
                 longitudine = 11.3428,
-                startTimeStamp = System.currentTimeMillis()
+                startTimeStamp = System.currentTimeMillis(),
+                parkingEffortScore = 3
             )
             avviaNuovoParcheggio(nuovo) // Usiamo la nuova funzione anche qui!
         }
