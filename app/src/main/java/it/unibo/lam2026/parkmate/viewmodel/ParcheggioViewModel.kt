@@ -40,6 +40,9 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
     ) {
         val tempoAttuale = System.currentTimeMillis()
 
+        // [NUOVO] Calcoliamo il Parking Effort Score prima di creare la sessione
+        val scoreCalcolato = calcolaAndResetParkingEffortScore(tempoAttuale)
+
         val nuovaSessione = SessioneParcheggio(
             veicoloNome = nomeVeicolo,
             tipoParcheggio = tipo,
@@ -49,7 +52,8 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
             tariffa = tariffa,
             scadenzaTimestamp = scadenzaTimestamp,
             nota = nota,
-            fotoPath = fotoPath
+            fotoPath = fotoPath,
+            parkingEffortScore = scoreCalcolato // [NUOVO] Passiamo il punteggio alla colonna del DB!
         )
 
         // GESTIONE DOPPIONI E SALVATAGGIO IN BACKGROUND
@@ -113,6 +117,39 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
 
             WorkManager.getInstance(getApplication()).enqueue(workRequest)
         }
+    }
+
+    // [NUOVO] Funzione di supporto per l'algoritmo del Parking Effort Score
+    private fun calcolaAndResetParkingEffortScore(tempoAttuale: Long): Int? {
+        // Accediamo alle SharedPreferences in modo sicuro tramite il contesto dell'applicazione
+        val sharedPrefs = getApplication<Application>().getSharedPreferences("ParkMatePrefs", Context.MODE_PRIVATE)
+
+        // Leggiamo il timestamp della discesa. Se non c'è, restituisce 0L (significa parcheggio manuale)
+        val timestampDiscesa = sharedPrefs.getLong("KEY_DISCESA_AUTO_TIMESTAMP", 0L)
+
+        if (timestampDiscesa == 0L) {
+            // L'utente ha avviato il parcheggio a mano senza passare dall'Activity Recognition
+            return null
+        }
+
+        // Calcoliamo la differenza in millisecondi e la convertiamo in minuti
+        val deltaMs = tempoAttuale - timestampDiscesa
+        val minutiTrascorsi = deltaMs / (1000 * 60)
+
+        // Applichiamo la scala di valutazione concordata (da 1 a 5)
+        val score = when {
+            minutiTrascorsi < 2 -> 1   // Sosta quasi immediata (Faticosità: Minima)
+            minutiTrascorsi < 5 -> 2   // Qualche minuto di ricerca (Faticosità: Bassa)
+            minutiTrascorsi < 10 -> 3  // Sforzo normale urbano (Faticosità: Media)
+            minutiTrascorsi < 20 -> 4  // Ha girato molto o parcheggiato lontano (Faticosità: Alta)
+            else -> 5                  // Oltre 20 minuti a piedi/ricerca (Faticosità: Critica)
+        }
+
+        // CRUCIALE: Puliamo subito la preferenza!
+        // Altrimenti il prossimo parcheggio manuale riutilizzerebbe questo vecchio dato.
+        sharedPrefs.edit().remove("KEY_DISCESA_AUTO_TIMESTAMP").apply()
+
+        return score
     }
 
     private fun impostaAllarmeScadenza(veicoloNome: String, scadenzaTimestamp: Long) {

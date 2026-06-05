@@ -46,6 +46,16 @@
             android:textColor="#B00020"
             android:textStyle="bold" />
 
+        <TextView
+            android:id="@+id/tvHistoryEffort"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Faticosità: ⭐⭐⭐"
+            android:textColor="#FF9800"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
         <Button
             android:id="@+id/btnTerminaParcheggio"
             android:layout_width="wrap_content"
