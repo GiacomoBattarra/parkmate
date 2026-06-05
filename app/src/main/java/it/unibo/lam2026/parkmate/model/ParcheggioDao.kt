@@ -44,4 +44,12 @@ interface ParcheggioDao {
     // 9. [NUOVO] Cerca se un veicolo specifico ha già un parcheggio in corso
     @Query("SELECT * FROM tabella_sessioni_parcheggio WHERE isAttivo = 1 AND veicoloNome = :nomeVeicolo LIMIT 1")
     fun getParcheggioAttivoPerVeicolo(nomeVeicolo: String): SessioneParcheggio?
+
+    // 10. Elimina solo le soste attive del veicolo
+    @Query("DELETE FROM tabella_sessioni_parcheggio WHERE veicoloNome = :nomeVeicolo AND isAttivo = 1")
+    fun eliminaParcheggiAttiviPerVeicolo(nomeVeicolo: String)
+
+    // 11. Aggiorna il nome nello storico (METODO SICURO)
+    @Query("UPDATE tabella_sessioni_parcheggio SET veicoloNome = :nuovoNome WHERE veicoloNome = :vecchioNome AND isAttivo = 0")
+    fun aggiornaNomeVeicoloNelloStorico(vecchioNome: String, nuovoNome: String)
 }

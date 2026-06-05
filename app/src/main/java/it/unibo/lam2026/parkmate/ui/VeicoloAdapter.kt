@@ -11,10 +11,10 @@ import it.unibo.lam2026.parkmate.R
 class VeicoloAdapter(
     private var listaVeicoli: List<Veicolo>,
     private val onEliminaClick: (Veicolo) -> Unit,
-    private val onModificaClick: (Veicolo) -> Unit
+    private val onModificaClick: (Veicolo) -> Unit,
+    private val onParcheggioAttivoClick: (Veicolo) -> Unit // 👇 NUOVO: Ascoltatore per il click sulla P!
 ) : RecyclerView.Adapter<VeicoloAdapter.VeicoloViewHolder>() {
 
-    // 👇 MEMORIA INTERNA PER SAPERE QUALI VEICOLI SONO PARCHEGGIATI 👇
     private var veicoliParcheggiati: List<String> = emptyList()
 
     inner class VeicoloViewHolder(val binding: ItemVeicoloBinding) : RecyclerView.ViewHolder(binding.root)
@@ -37,14 +37,18 @@ class VeicoloAdapter(
             "bici" -> holder.binding.imgTipoVeicolo.setImageResource(R.drawable.ic_bike)
         }
 
-        // 👇 CONTROLLO STATO PARCHEGGIO ATTIVO 👇
-        // Ricorda: l'app nel database salva il veicolo come "Nome (Tipo)" preso dallo Spinner!
+        // CONTROLLO STATO PARCHEGGIO ATTIVO
         val stringaIdentificativa = "${veicoloAttuale.nome} (${veicoloAttuale.tipo})"
 
         if (veicoliParcheggiati.contains(stringaIdentificativa)) {
             holder.binding.imgStatoParcheggio.visibility = View.VISIBLE
         } else {
             holder.binding.imgStatoParcheggio.visibility = View.GONE
+        }
+
+        // 👇 NUOVO: Click sulla P 👇
+        holder.binding.imgStatoParcheggio.setOnClickListener {
+            onParcheggioAttivoClick(veicoloAttuale)
         }
 
         // Click sul Cestino
@@ -65,9 +69,8 @@ class VeicoloAdapter(
         notifyDataSetChanged()
     }
 
-    // 👇 NUOVO METODO DA CHIAMARE DAL FRAGMENT 👇
     fun aggiornaStatoParcheggi(nomiParcheggiati: List<String>) {
         this.veicoliParcheggiati = nomiParcheggiati
-        notifyDataSetChanged() // Rinfresca la lista accendendo o spegnendo le "P"
+        notifyDataSetChanged()
     }
 }

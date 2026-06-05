@@ -29,7 +29,19 @@ class HistoryAdapter(
     override fun onBindViewHolder(holder: HistoryViewHolder, position: Int) {
         val sessione = storicoList[position]
 
-        holder.binding.tvHistoryVehicle.text = "Veicolo: ${sessione.veicoloNome}"
+        // --- INIZIO MODIFICA: SCRITTA ROSSA HTML PER I VEICOLI ELIMINATI ---
+        val isEliminato = sessione.veicoloNome.contains("[ELIMINATO]")
+        val nomeReale = sessione.veicoloNome.replace(" [ELIMINATO]", "")
+
+        if (isEliminato) {
+            @Suppress("DEPRECATION")
+            val testoHtml = "Veicolo: $nomeReale <br> <font color='#D32F2F'><b>(❌ VEICOLO ELIMINATO)</b></font>"
+            holder.binding.tvHistoryVehicle.text = android.text.Html.fromHtml(testoHtml)
+        } else {
+            holder.binding.tvHistoryVehicle.text = "Veicolo: $nomeReale"
+        }
+        // --- FINE MODIFICA ---
+
         holder.binding.tvHistoryType.text = "Tipo: ${sessione.tipoParcheggio}"
 
         val formattaData = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
@@ -104,7 +116,7 @@ class HistoryAdapter(
                         // Fallback: se il geocoder non trova la via, stampiamo le coordinate corte
                         val latCorta = String.format(Locale.getDefault(), "%.4f", sessione.latitudine)
                         val lonCorta = String.format(Locale.getDefault(), "%.4f", sessione.longitudine)
-                        holder.binding.tvHistoryLocation.text = "📍 Coord: $latCorta, $lonCorta"
+                        holder.binding.tvHistoryLocation.text = "📍 Non riesco a caricare l'indirizzo\n📍 Coord: $latCorta, $lonCorta"
                     }
                 }
             } catch (e: Exception) {
@@ -112,7 +124,7 @@ class HistoryAdapter(
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     val latCorta = String.format(Locale.getDefault(), "%.4f", sessione.latitudine)
                     val lonCorta = String.format(Locale.getDefault(), "%.4f", sessione.longitudine)
-                    holder.binding.tvHistoryLocation.text = "📍 Coord: $latCorta, $lonCorta"
+                    holder.binding.tvHistoryLocation.text = "📍 Non riesco a caricare l'indirizzo\n📍 Coord: $latCorta, $lonCorta"
                 }
             }
         }

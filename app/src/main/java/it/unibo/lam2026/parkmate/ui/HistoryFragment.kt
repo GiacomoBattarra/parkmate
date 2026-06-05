@@ -26,13 +26,10 @@ class HistoryFragment : Fragment() {
     private lateinit var adapter: HistoryAdapter
     private var listaCompletaStorico: List<SessioneParcheggio> = emptyList()
     private var isSpinnerVeicoliPronto = false
-
-    // Memoria per sapere se stiamo guardando la mappa o la lista
     private var isMapVisible = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Inizializziamo OSMDroid (obbligatorio per usare la mappa)
         Configuration.getInstance().load(
             requireContext(),
             PreferenceManager.getDefaultSharedPreferences(requireContext())
@@ -50,43 +47,47 @@ class HistoryFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // 1. Configuriamo la Mappa di base
         binding.mapViewHistory.setMultiTouchControls(true)
         binding.mapViewHistory.controller.setZoom(13.0)
-        binding.mapViewHistory.controller.setCenter(GeoPoint(44.4949, 11.3426)) // Centro generico
+        binding.mapViewHistory.controller.setCenter(GeoPoint(44.4949, 11.3426))
 
-        // 2. Bottone Toggle: Scambia tra Mappa e Lista
+        val ricevitoreClickMappa = object : org.osmdroid.events.MapEventsReceiver {
+            override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
+                org.osmdroid.views.overlay.infowindow.InfoWindow.closeAllInfoWindowsOn(binding.mapViewHistory)
+                return false
+            }
+            override fun longPressHelper(p: GeoPoint?): Boolean = false
+        }
+        binding.mapViewHistory.overlays.add(org.osmdroid.views.overlay.MapEventsOverlay(ricevitoreClickMappa))
+
         binding.btnToggleView.setOnClickListener {
             isMapVisible = !isMapVisible
             if (isMapVisible) {
                 binding.recyclerViewHistory.visibility = View.GONE
                 binding.mapViewHistory.visibility = View.VISIBLE
-                binding.btnToggleView.setImageResource(android.R.drawable.ic_menu_sort_by_size) // Icona lista
+                binding.btnToggleView.setImageResource(android.R.drawable.ic_menu_sort_by_size)
             } else {
                 binding.mapViewHistory.visibility = View.GONE
                 binding.recyclerViewHistory.visibility = View.VISIBLE
-                binding.btnToggleView.setImageResource(android.R.drawable.ic_dialog_map) // Icona mappa
+                binding.btnToggleView.setImageResource(android.R.drawable.ic_dialog_map)
             }
         }
 
-        // 3. Configuriamo la lista
         binding.recyclerViewHistory.layoutManager = LinearLayoutManager(requireContext())
         adapter = HistoryAdapter(
             storicoList = emptyList(),
-            onTerminaClick = { sessioneDaChiudere -> viewModel.terminaParcheggio(sessioneDaChiudere.id) },
-            onEliminaClick = { sessioneDaEliminare -> viewModel.cancellaParcheggio(sessioneDaEliminare.id) }
+            onTerminaClick = { s -> viewModel.terminaParcheggio(s.id) },
+            onEliminaClick = { s -> viewModel.cancellaParcheggio(s.id) }
         )
         binding.recyclerViewHistory.adapter = adapter
 
-        // 4. Configuriamo la tendina del Tipo
         val opzioniFiltroTipo = arrayOf("Tutti i Tipi", "Solo Liberi", "Solo Orario", "Solo Fissi")
         val spinnerTipoAdapter = android.widget.ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, opzioniFiltroTipo)
         spinnerTipoAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         binding.spinnerFiltroTipo.adapter = spinnerTipoAdapter
 
-        // 5. Ascoltiamo i click sulle tendine
         val listenerFiltri = object : android.widget.AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, pos: Int, id: Long) {
                 applicaFiltro()
             }
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
@@ -94,18 +95,18 @@ class HistoryFragment : Fragment() {
         binding.spinnerFiltroTipo.onItemSelectedListener = listenerFiltri
         binding.spinnerFiltroVeicolo.onItemSelectedListener = listenerFiltri
 
-        // 6. Osserviamo il Database
         viewModel.storicoParcheggi.observe(viewLifecycleOwner) { resParcheggi ->
             listaCompletaStorico = resParcheggi
 
-            val veicoliUnici = resParcheggi.map { it.veicoloNome }.distinct()
+            // --- RISOLTO IL BUG DELLO SPINNER ---
+            // Rimuoviamo "[ELIMINATO]" dai nomi nello spinner, così raggruppa tutto correttamente
+            val veicoliUnici = resParcheggi.map { it.veicoloNome.replace(" [ELIMINATO]", "") }.distinct()
             val opzioniVeicolo = mutableListOf("Tutti i Veicoli")
             opzioniVeicolo.addAll(veicoliUnici)
 
             val currentAdapter = binding.spinnerFiltroVeicolo.adapter
             if (currentAdapter == null || currentAdapter.count != opzioniVeicolo.size) {
-                val spinnerVeicoloAdapter = android.widget.ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, opzioniVeicolo)
-                spinnerVeicoloAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                val spinnerVeicoloAdapter = android.widget.ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, opzioniVeicolo)
                 binding.spinnerFiltroVeicolo.adapter = spinnerVeicoloAdapter
             }
 
@@ -122,41 +123,58 @@ class HistoryFragment : Fragment() {
 
         var listaFiltrata = listaCompletaStorico
 
-        // Filtro 1: Tipo
         listaFiltrata = when (selezioneTipo) {
-            1 -> listaFiltrata.filter { it.tipoParcheggio.contains("Libero", ignoreCase = true) }
+            1 -> listaFiltrata.filter { it.tipoParcheggio.contains("Libero", ignoreCase = true) || it.tipoParcheggio.contains("Gratis", ignoreCase = true) }
             2 -> listaFiltrata.filter { it.tipoParcheggio.contains("Orario", ignoreCase = true) }
             3 -> listaFiltrata.filter { it.tipoParcheggio.contains("Fiss", ignoreCase = true) }
             else -> listaFiltrata
         }
 
-        // Filtro 2: Veicolo
+        // --- RISOLTO IL BUG DEL FILTRO ---
         if (selezioneVeicolo != "Tutti i Veicoli") {
-            listaFiltrata = listaFiltrata.filter { it.veicoloNome == selezioneVeicolo }
+            listaFiltrata = listaFiltrata.filter { it.veicoloNome.replace(" [ELIMINATO]", "") == selezioneVeicolo }
         }
 
-        // Aggiorniamo la LISTA...
         adapter.aggiornaDati(listaFiltrata)
-
-        // ...E AGGIORNIAMO LA MAPPA!
         aggiornaMappaStorico(listaFiltrata)
     }
 
     private fun aggiornaMappaStorico(lista: List<SessioneParcheggio>) {
-        binding.mapViewHistory.overlays.clear()
+        binding.mapViewHistory.overlays.removeAll { it is org.osmdroid.views.overlay.Marker }
 
         for (parcheggio in lista) {
             val marker = org.osmdroid.views.overlay.Marker(binding.mapViewHistory)
             marker.position = GeoPoint(parcheggio.latitudine, parcheggio.longitudine)
 
-            // 1. Prima riga in alto (Titolo del fumetto) -> Il Veicolo
-            marker.title = "🚗 ${parcheggio.veicoloNome}"
+            val nomeReale = parcheggio.veicoloNome.replace(" [ELIMINATO]", "")
+            val iconaMezzo = when {
+                nomeReale.contains("Moto", ignoreCase = true) -> "🏍️"
+                nomeReale.contains("Bici", ignoreCase = true) -> "🚲"
+                else -> "🚗"
+            }
 
-            // Prepariamo la Data
+            // Passiamo l'informazione se è eliminato direttamente nel titolo
+            marker.title = if (parcheggio.veicoloNome.contains("[ELIMINATO]")) {
+                "$iconaMezzo $nomeReale [ELIMINATO]"
+            } else {
+                "$iconaMezzo $nomeReale"
+            }
+
+            val iconaMarker = marker.icon?.constantState?.newDrawable()?.mutate()
+            if (parcheggio.isAttivo) {
+                iconaMarker?.clearColorFilter()
+                iconaMarker?.alpha = 255
+            } else {
+                val matrix = android.graphics.ColorMatrix()
+                matrix.setSaturation(0f)
+                iconaMarker?.colorFilter = android.graphics.ColorMatrixColorFilter(matrix)
+                iconaMarker?.alpha = 150
+            }
+            marker.icon = iconaMarker
+
             val formattaData = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
             val data = formattaData.format(java.util.Date(parcheggio.startTimeStamp))
 
-            // Prepariamo il Costo
             var costoTesto = "N/A"
             if (parcheggio.isAttivo) {
                 costoTesto = "In corso..."
@@ -165,17 +183,23 @@ class HistoryFragment : Fragment() {
                 else String.format(java.util.Locale.getDefault(), "€%.2f", parcheggio.costoTotale)
             }
 
-            // Impostiamo un testo temporaneo mentre cerca la via su internet
-            marker.snippet = "📅 Data: $data\n" + "📍 Ricerca indirizzo...\n" + "🅿️ Tipo: ${parcheggio.tipoParcheggio}\n" + "💰 Costo: $costoTesto"
+            marker.snippet = "📅 Data: $data\n📍 Ricerca indirizzo in corso...\n🅿️ Tipo: ${parcheggio.tipoParcheggio}\n💰 Costo: $costoTesto"
             marker.setAnchor(org.osmdroid.views.overlay.Marker.ANCHOR_CENTER, org.osmdroid.views.overlay.Marker.ANCHOR_BOTTOM)
 
-            // Diciamo al marker di usare il nostro nuovo fumetto che supporta le righe multiple!
             marker.infoWindow = HistoryInfoWindow(binding.mapViewHistory)
+
+            marker.setOnMarkerClickListener { m, mapView ->
+                if (m.isInfoWindowOpen) m.closeInfoWindow()
+                else {
+                    org.osmdroid.views.overlay.infowindow.InfoWindow.closeAllInfoWindowsOn(mapView)
+                    m.showInfoWindow()
+                }
+                true
+            }
 
             binding.mapViewHistory.overlays.add(marker)
 
-            // --- MAGIA: CHIAMIAMO IL GEOCODER IN BACKGROUND ---
-            // Usa viewLifecycleOwner.lifecycleScope per non bloccare lo schermo
+            // Geocoding
             viewLifecycleOwner.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 try {
                     val geocoder = android.location.Geocoder(requireContext(), java.util.Locale.getDefault())
@@ -189,30 +213,21 @@ class HistoryFragment : Fragment() {
 
                         if (via.isNotEmpty() && citta.isNotEmpty()) {
                             if (civico.isNotEmpty()) "$via $civico, $citta" else "$via, $citta"
-                        } else {
-                            addr.getAddressLine(0) ?: "Indirizzo sconosciuto"
-                        }
-                    } else {
-                        "Coordinate sconosciute"
-                    }
+                        } else addr.getAddressLine(0) ?: "Indirizzo sconosciuto"
+                    } else "Coordinate sconosciute"
 
-                    // Torniamo sul Thread principale per aggiornare la grafica
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        // Inseriamo l'ordine esatto che hai chiesto: Data, Via, Tipo e Costo!
-                        marker.snippet = "📅 Data: $data\n" + "📍 $indirizzoPulito\n" + "🅿️ Tipo: ${parcheggio.tipoParcheggio}\n" + "💰 Costo: $costoTesto"
-
-                        // Se l'utente ha il fumetto aperto proprio ora, lo "riavviamo" per mostrare la via
+                        marker.snippet = "📅 Data: $data\n📍 $indirizzoPulito\n🅿️ Tipo: ${parcheggio.tipoParcheggio}\n💰 Costo: $costoTesto"
                         if (marker.isInfoWindowOpen) {
                             marker.closeInfoWindow()
                             marker.showInfoWindow()
                         }
                     }
                 } catch (e: Exception) {
-                    // Fallback se l'emulatore è offline
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                         val latCorta = String.format(java.util.Locale.getDefault(), "%.4f", parcheggio.latitudine)
                         val lonCorta = String.format(java.util.Locale.getDefault(), "%.4f", parcheggio.longitudine)
-                        marker.snippet = "📅 Data: $data\n" + "📍 Coord: $latCorta, $lonCorta\n" + "🅿️ Tipo: ${parcheggio.tipoParcheggio}\n" + "💰 Costo: $costoTesto"
+                        marker.snippet = "📅 Data: $data\n📍 Non riesco a caricare l'indirizzo\n📍 Coord: $latCorta, $lonCorta\n🅿️ Tipo: ${parcheggio.tipoParcheggio}\n💰 Costo: $costoTesto"
                         if (marker.isInfoWindowOpen) {
                             marker.closeInfoWindow()
                             marker.showInfoWindow()
@@ -221,16 +236,13 @@ class HistoryFragment : Fragment() {
                 }
             }
         }
-
         binding.mapViewHistory.invalidate()
 
-        // Se c'è almeno un risultato, spostiamo l'inquadratura sul più recente
         if (lista.isNotEmpty()) {
             binding.mapViewHistory.controller.animateTo(GeoPoint(lista[0].latitudine, lista[0].longitudine))
         }
     }
 
-    // Gestione del ciclo di vita della mappa
     override fun onResume() {
         super.onResume()
         binding.mapViewHistory.onResume()
@@ -247,24 +259,31 @@ class HistoryFragment : Fragment() {
     }
 
     // ---------------------------------------------------------
-// Classe HistoryInfoWindow (Fumetto personalizzato a più righe)
-// ---------------------------------------------------------
+    // Classe HistoryInfoWindow: QUI AVVIENE LA MAGIA DEL TESTO ROSSO!
+    // ---------------------------------------------------------
     class HistoryInfoWindow(mapView: org.osmdroid.views.MapView)
         : org.osmdroid.views.overlay.infowindow.MarkerInfoWindow(it.unibo.lam2026.parkmate.R.layout.marker_info_window, mapView) {
 
+        @Suppress("DEPRECATION")
         override fun onOpen(item: Any?) {
             val marker = item as? org.osmdroid.views.overlay.Marker ?: return
 
-            // Colleghiamo i testi del tuo layout personalizzato
             val txtTitle = mView.findViewById<android.widget.TextView>(it.unibo.lam2026.parkmate.R.id.txtCustomTitle)
             val txtDescription = mView.findViewById<android.widget.TextView>(it.unibo.lam2026.parkmate.R.id.txtCustomDescription)
 
-            txtTitle?.text = marker.title
+            // Controlliamo se nel titolo c'è la tag [ELIMINATO]
+            if (marker.title.contains("[ELIMINATO]")) {
+                val nomePulito = marker.title.replace(" [ELIMINATO]", "")
+                // HTML: Colore Rosso scuro (#D32F2F) e Grassetto (<b>)
+                val htmlTesto = "$nomePulito <br> <font color='#D32F2F'><b>❌ VEICOLO ELIMINATO</b></font>"
+                txtTitle?.text = android.text.Html.fromHtml(htmlTesto)
+            } else {
+                txtTitle?.text = marker.title
+            }
+
             txtDescription?.text = marker.snippet
 
-            // Visto che siamo nello storico, nascondiamo il bottone "Termina Sosta" per non confondere l'utente!
-            val btnTermina = mView.findViewById<android.widget.Button>(it.unibo.lam2026.parkmate.R.id.btnInfoWindowTermina)
-            btnTermina?.visibility = android.view.View.GONE
+            mView.findViewById<android.widget.Button>(it.unibo.lam2026.parkmate.R.id.btnInfoWindowTermina)?.visibility = android.view.View.GONE
         }
     }
 }
