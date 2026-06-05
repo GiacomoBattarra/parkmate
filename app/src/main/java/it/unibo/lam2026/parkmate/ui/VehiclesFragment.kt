@@ -6,16 +6,20 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.activityViewModels // 👇 IMPORTANTE: Aggiunto per condividere il ViewModel dei parcheggi
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope // <-- IMPORT AGGIUNTO PER RISOLVERE L'ERRORE
 import androidx.recyclerview.widget.LinearLayoutManager
 import it.unibo.lam2026.parkmate.R
 import it.unibo.lam2026.parkmate.databinding.FragmentVehiclesBinding
 import it.unibo.lam2026.parkmate.model.AppDatabase
 import it.unibo.lam2026.parkmate.model.VeicoloRepository
-import it.unibo.lam2026.parkmate.viewmodel.ParcheggioViewModel // 👇 IMPORTANTE: Aggiunto import
+import it.unibo.lam2026.parkmate.viewmodel.ParcheggioViewModel
 import it.unibo.lam2026.parkmate.viewmodel.VeicoliViewModel
 import it.unibo.lam2026.parkmate.viewmodel.VeicoliViewModelFactory
+import kotlinx.coroutines.Dispatchers // <-- IMPORT AGGIUNTO
+import kotlinx.coroutines.launch // <-- IMPORT AGGIUNTO
+import kotlinx.coroutines.withContext // <-- IMPORT AGGIUNTO
 
 class VehiclesFragment : Fragment() {
 
@@ -24,7 +28,6 @@ class VehiclesFragment : Fragment() {
     private lateinit var viewModel: VeicoliViewModel
     private lateinit var adapter: VeicoloAdapter
 
-    // 👇 NUOVO: Recuperiamo il ParcheggioViewModel condiviso a livello di Activity 👇
     private val parcheggioViewModel: ParcheggioViewModel by activityViewModels()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -35,52 +38,109 @@ class VehiclesFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // 1. Inizializziamo il database e il repository
         val dao = AppDatabase.getDatabase(requireContext()).veicoloDao()
         val repository = VeicoloRepository(dao)
 
-        // 2. Inizializziamo il ViewModel dei Veicoli
         val factory = VeicoliViewModelFactory(repository)
         viewModel = ViewModelProvider(this, factory)[VeicoliViewModel::class.java]
 
-        // 3. Prepariamo il LayoutManager della lista
         binding.recyclerViewVeicoli.layoutManager = LinearLayoutManager(requireContext())
 
-        // 👇 MODIFICA ARCHITETTURALE: Creiamo l'adapter una volta sola (all'inizio vuoto) 👇
         adapter = VeicoloAdapter(
             listaVeicoli = emptyList(),
             onEliminaClick = { veicoloDaEliminare ->
-                viewModel.rimuoviVeicolo(veicoloDaEliminare.id)
+                mostraDialogEliminazione(veicoloDaEliminare)
             },
             onModificaClick = { veicoloDaModificare ->
                 mostraDialogModifica(veicoloDaModificare)
+            },
+            onParcheggioAttivoClick = { veicoloParcheggiato ->
+                mostraDettagliSosta(veicoloParcheggiato)
             }
         )
-        // Attacchiamo subito l'Adapter alla RecyclerView
+
         binding.recyclerViewVeicoli.adapter = adapter
 
-        // 4. OSSERVIAMO IL DATABASE DEI VEICOLI: aggiorna la lista quando i dati cambiano
         viewModel.listaVeicoli.observe(viewLifecycleOwner) { veicoli ->
-            // Usiamo il metodo aggiornaDati per non distruggere e ricreare l'oggetto adapter
             adapter.aggiornaDati(veicoli)
         }
 
-        // 👇 NUOVO: OSSERVIAMO I PARCHEGGI ATTIVI PER ACCENDERE LA "P" 👇
         parcheggioViewModel.parcheggiAttivi.observe(viewLifecycleOwner) { listaParcheggi ->
-            // Estraiamo la lista testuale dei veicoli attualmente parcheggiati ("Nome (Tipo)")
             val nomiMacchineParcheggiate = listaParcheggi.map { it.veicoloNome }
-
-            // Passiamo la lista all'adapter che accenderà le P corrispondenti!
             adapter.aggiornaStatoParcheggi(nomiMacchineParcheggiate)
         }
 
-        // 5. Bottone '+' per aggiungere un nuovo veicolo
         binding.fabAggiungiVeicolo.setOnClickListener {
             mostraDialogAggiuntaVeicolo()
         }
 
-        // 6. Diciamo al ViewModel di caricare i dati la prima volta
         viewModel.caricaVeicoli()
+    }
+
+    // --- Pop-up di Conferma Eliminazione Intelligente ---
+    private fun mostraDialogEliminazione(veicolo: it.unibo.lam2026.parkmate.model.Veicolo) {
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Elimina Veicolo")
+            .setMessage("Sei sicuro di voler eliminare '${veicolo.nome}'?\n\nEventuali soste in corso verranno interrotte, ma i parcheggi passati rimarranno visibili nello storico con un'etichetta speciale.")
+            .setPositiveButton("Sì, elimina") { _, _ ->
+                val nomeNelDatabase = "${veicolo.nome} (${veicolo.tipo})"
+                parcheggioViewModel.gestisciEliminazioneVeicolo(nomeNelDatabase)
+                viewModel.rimuoviVeicolo(veicolo.id)
+                Toast.makeText(requireContext(), "Veicolo eliminato correttamente!", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Annulla", null)
+            .show()
+    }
+
+    // --- Pop-up Dettagli Sosta cliccando la P (Con Indirizzo!) ---
+    private fun mostraDettagliSosta(veicolo: it.unibo.lam2026.parkmate.model.Veicolo) {
+        val parcheggiInCorso = parcheggioViewModel.parcheggiAttivi.value ?: return
+        val nomeNelDatabase = "${veicolo.nome} (${veicolo.tipo})"
+        val sosta = parcheggiInCorso.find { it.veicoloNome == nomeNelDatabase }
+
+        if (sosta != null) {
+            val formattaData = java.text.SimpleDateFormat("dd/MM/yyyy - HH:mm", java.util.Locale.getDefault())
+            val data = formattaData.format(java.util.Date(sosta.startTimeStamp))
+
+            // Lanciamo il Geocoder in background
+            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                var indirizzoTesto = ""
+                try {
+                    val geocoder = android.location.Geocoder(requireContext(), java.util.Locale.getDefault())
+                    val indirizzi = geocoder.getFromLocation(sosta.latitudine, sosta.longitudine, 1)
+
+                    if (!indirizzi.isNullOrEmpty()) {
+                        val addr = indirizzi[0]
+                        val via = addr.thoroughfare ?: ""
+                        val civico = addr.subThoroughfare ?: ""
+                        val citta = addr.locality ?: ""
+
+                        indirizzoTesto = if (via.isNotEmpty() && citta.isNotEmpty()) {
+                            if (civico.isNotEmpty()) "$via $civico, $citta" else "$via, $citta"
+                        } else {
+                            addr.getAddressLine(0) ?: "Indirizzo sconosciuto"
+                        }
+                    } else {
+                        val latCorta = String.format(java.util.Locale.getDefault(), "%.4f", sosta.latitudine)
+                        val lonCorta = String.format(java.util.Locale.getDefault(), "%.4f", sosta.longitudine)
+                        indirizzoTesto = "Coord: $latCorta, $lonCorta"
+                    }
+                } catch (e: Exception) {
+                    val latCorta = String.format(java.util.Locale.getDefault(), "%.4f", sosta.latitudine)
+                    val lonCorta = String.format(java.util.Locale.getDefault(), "%.4f", sosta.longitudine)
+                    indirizzoTesto = "Non riesco a caricare l'indirizzo\nCoord: $latCorta, $lonCorta"
+                }
+
+                // Torniamo sul Thread principale per mostrare il pop-up
+                withContext(Dispatchers.Main) {
+                    com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                        .setTitle("🅿️ Sosta in corso")
+                        .setMessage("Veicolo: ${veicolo.nome}\nIniziata il: $data\nTariffa: ${sosta.tipoParcheggio}\nPosizione: 📍 $indirizzoTesto\n\nPer maggiori dettagli o per terminare la sosta, recati nella sezione Mappa o nello Storico.")
+                        .setPositiveButton("Chiudi", null)
+                        .show()
+                }
+            }
+        }
     }
 
     private fun mostraDialogAggiuntaVeicolo() {

@@ -19,22 +19,24 @@
         <Spinner
             android:id="@+id/spinnerFiltroTipo"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_weight="1"
-            android:minHeight="48dp" />
+            android:layout_marginEnd="4dp"
+            android:background="@android:drawable/btn_dropdown" />
 
         <Spinner
             android:id="@+id/spinnerFiltroVeicolo"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_weight="1"
-            android:minHeight="48dp" />
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="8dp"
+            android:background="@android:drawable/btn_dropdown" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/btnToggleView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
             app:fabSize="mini"
             android:src="@android:drawable/ic_dialog_map"
             app:tint="@android:color/white"

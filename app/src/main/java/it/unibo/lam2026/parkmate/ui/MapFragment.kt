@@ -47,7 +47,7 @@ class MapFragment : Fragment() {
     private var isEditingFavorite = false
     private var locationBeingEdited: PosizioneSalvata? = null
 
-    // --- NUOVO: Memoria per sapere se la mappa è pulita (invisibile) o normale ---
+    // Memoria per sapere se la mappa è pulita (invisibile) o normale
     private var isMappaPulita = false
 
     private lateinit var viewModel: MainViewModel
@@ -99,9 +99,16 @@ class MapFragment : Fragment() {
                     val segnaposto = org.osmdroid.views.overlay.Marker(binding.mapView)
                     segnaposto.id = "PARCHEGGIO"
                     segnaposto.position = org.osmdroid.util.GeoPoint(parcheggio.latitudine, parcheggio.longitudine)
-                    segnaposto.title = "🚗 ${parcheggio.veicoloNome}"
 
-                    // --- [NUOVO] CALCOLO TEMPO E COSTI IN TEMPO REALE ---
+                    // --- NUOVO: Scelta dinamica dell'emoji in base al tipo di veicolo ---
+                    val iconaMezzo = when {
+                        parcheggio.veicoloNome.contains("Moto", ignoreCase = true) -> "🏍️"
+                        parcheggio.veicoloNome.contains("Bici", ignoreCase = true) -> "🚲"
+                        else -> "🚗"
+                    }
+                    segnaposto.title = "$iconaMezzo ${parcheggio.veicoloNome}"
+
+                    // CALCOLO TEMPO E COSTI IN TEMPO REALE
                     val formattaData = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
                     val oraInizio = formattaData.format(java.util.Date(parcheggio.startTimeStamp))
 
@@ -122,12 +129,11 @@ class MapFragment : Fragment() {
                         }
                     }
 
-                    // Creiamo il testo compatto con tutte le nuove info
+                    // Creiamo il testo compatto con tutte le info
                     val infoDettagliate = "${parcheggio.tipoParcheggio}\n🕒 Inizio: $oraInizio | ⏳ Trascorso: $tempoTrascorso\n💰 Costo Attuale: $costoTesto"
 
-                    // Assegnamo temporaneamente il testo (verrà poi aggiornato con l'indirizzo)
+                    // Assegnamo temporaneamente il testo
                     segnaposto.snippet = infoDettagliate
-                    // -----------------------------------------------------
 
                     // Se la mappa è attualmente "pulita", rendiamo il nuovo marker subito trasparente
                     if (isMappaPulita) segnaposto.setAlpha(0.0f)
@@ -139,7 +145,7 @@ class MapFragment : Fragment() {
                     }
 
                     segnaposto.setOnMarkerClickListener { marker, mapView ->
-                        // --- NUOVO: Blocca i click fantasma se la mappa è pulita ---
+                        // Blocca i click fantasma se la mappa è pulita
                         if (isMappaPulita) return@setOnMarkerClickListener true
 
                         if (marker.isInfoWindowOpen) marker.closeInfoWindow()
@@ -155,25 +161,34 @@ class MapFragment : Fragment() {
                             val geocoder = Geocoder(requireContext(), Locale.getDefault())
                             val indirizzi = geocoder.getFromLocation(parcheggio.latitudine, parcheggio.longitudine, 1)
 
-                            if (!indirizzi.isNullOrEmpty()) {
+                            val indirizzoPulito = if (!indirizzi.isNullOrEmpty()) {
                                 val addr = indirizzi[0]
                                 val via = addr.thoroughfare ?: ""
                                 val civico = addr.subThoroughfare ?: ""
                                 val citta = addr.locality ?: ""
-                                val indirizzoPulito = if (via.isNotEmpty() && citta.isNotEmpty()) {
+                                if (via.isNotEmpty() && citta.isNotEmpty()) {
                                     if (civico.isNotEmpty()) "$via $civico, $citta" else "$via, $citta"
                                 } else addr.getAddressLine(0)
+                            } else "Indirizzo sconosciuto"
 
-                                withContext(Dispatchers.Main) {
-                                    // Aggiungiamo l'indirizzo in fondo al nostro snippet dettagliato
-                                    segnaposto.snippet = "$infoDettagliate\n📍 $indirizzoPulito"
-                                    if (segnaposto.isInfoWindowOpen) {
-                                        segnaposto.closeInfoWindow()
-                                        segnaposto.showInfoWindow()
-                                    }
+                            withContext(Dispatchers.Main) {
+                                segnaposto.snippet = "$infoDettagliate\n📍 $indirizzoPulito"
+                                if (segnaposto.isInfoWindowOpen) {
+                                    segnaposto.closeInfoWindow()
+                                    segnaposto.showInfoWindow()
                                 }
                             }
-                        } catch (e: Exception) { }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                val latCorta = String.format(Locale.getDefault(), "%.4f", parcheggio.latitudine)
+                                val lonCorta = String.format(Locale.getDefault(), "%.4f", parcheggio.longitudine)
+                                segnaposto.snippet = "$infoDettagliate\n📍 Non riesco a caricare l'indirizzo\n📍 Coord: $latCorta, $lonCorta"
+                                if (segnaposto.isInfoWindowOpen) {
+                                    segnaposto.closeInfoWindow()
+                                    segnaposto.showInfoWindow()
+                                }
+                            }
+                        }
                     }
 
                     segnaposto.setAnchor(org.osmdroid.views.overlay.Marker.ANCHOR_CENTER, org.osmdroid.views.overlay.Marker.ANCHOR_BOTTOM)
@@ -300,7 +315,7 @@ class MapFragment : Fragment() {
                         withContext(Dispatchers.Main) {
                             val latCorta = String.format(Locale.getDefault(), "%.4f", posizione.latitudine)
                             val lonCorta = String.format(Locale.getDefault(), "%.4f", posizione.longitudine)
-                            markerCuore.snippet = "📍 Coord: $latCorta, $lonCorta"
+                            markerCuore.snippet = "📍 Non riesco a caricare l'indirizzo\n📍 Coord: $latCorta, $lonCorta"
 
                             if (markerCuore.isInfoWindowOpen) {
                                 markerCuore.closeInfoWindow()
@@ -431,33 +446,28 @@ class MapFragment : Fragment() {
         }
 
         // ---------------------------------------------------------
-        // 6. NUOVO: BOTTONE "X" PER PULIRE LA MAPPA (Modalità Zen)
+        // 6. BOTTONE "X" PER PULIRE LA MAPPA (Modalità Zen)
         // ---------------------------------------------------------
         binding.btnTerminaSosta.setOnClickListener {
-            // Invertiamo lo stato
             isMappaPulita = !isMappaPulita
 
-            // Scorriamo tutti gli elementi sulla mappa
             for (overlay in binding.mapView.overlays) {
                 if (overlay is org.osmdroid.views.overlay.Marker) {
-                    // Troviamo i nostri parcheggi e i nostri preferiti
                     if (overlay.id == "PARCHEGGIO" || overlay.id == "PREFERITO") {
                         if (isMappaPulita) {
-                            overlay.setAlpha(0.0f) // Li facciamo sparire
-                            overlay.closeInfoWindow() // Chiudiamo eventuali fumetti aperti
+                            overlay.setAlpha(0.0f)
+                            overlay.closeInfoWindow()
                         } else {
-                            overlay.setAlpha(1.0f) // Li facciamo ricomparire
+                            overlay.setAlpha(1.0f)
                         }
                     }
                 }
             }
 
-            // Messaggio per far capire all'utente cosa è successo
             if (isMappaPulita) {
                 Toast.makeText(requireContext(), "Mappa pulita. Clicca la X di nuovo per mostrare tutto.", Toast.LENGTH_SHORT).show()
             }
 
-            // Aggiorniamo la grafica
             binding.mapView.invalidate()
         }
     }
@@ -476,6 +486,23 @@ class MapFragment : Fragment() {
         mapController.setCenter(GeoPoint(44.4949, 11.3426))
         binding.mapView.minZoomLevel = 3.0
         binding.mapView.setMultiTouchControls(true)
+
+        // --- NUOVO: Ascoltatore di click sulla mappa per chiudere i popup ---
+        val ricevitoreClickMappa = object : org.osmdroid.events.MapEventsReceiver {
+            override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
+                // Quando l'utente tocca un punto vuoto della mappa, chiudiamo tutti i fumetti aperti!
+                org.osmdroid.views.overlay.infowindow.InfoWindow.closeAllInfoWindowsOn(binding.mapView)
+                return false // Restituiamo 'false' per permettere alla mappa di continuare a muoversi
+            }
+
+            override fun longPressHelper(p: GeoPoint?): Boolean {
+                return false // Non facciamo nulla con la pressione prolungata
+            }
+        }
+
+        // Aggiungiamo l'ascoltatore alla mappa!
+        val mapEventsOverlay = org.osmdroid.views.overlay.MapEventsOverlay(ricevitoreClickMappa)
+        binding.mapView.overlays.add(mapEventsOverlay)
     }
 
     private fun setupMyLocation() {
