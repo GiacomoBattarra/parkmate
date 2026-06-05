@@ -29,8 +29,8 @@ class PedestrianTrackingService : Service() {
     private var distanzaTotaleMetri: Float = 0f
     private var timestampInizioCamminata: Long = 0
 
-    // ID del parcheggio che stiamo "misurando"
-    private var sessionIdCorrente: Long = -1
+    // NUOVO: Flag per evitare che il servizio si riavvii da zero se stiamo già tracciando
+    private var isTracking = false
 
     override fun onCreate() {
         super.onCreate()
@@ -43,14 +43,19 @@ class PedestrianTrackingService : Service() {
             return START_NOT_STICKY
         }
 
-        // Recuperiamo l'ID del parcheggio per sapere a chi assegnare i metri
-        sessionIdCorrente = intent?.getLongExtra("SESSION_ID", -1) ?: -1
-        timestampInizioCamminata = System.currentTimeMillis()
+        // NUOVO CONTROLLO (Risolve Bug 2):
+        // Se stiamo GIÀ tracciando (es. 2° parcheggio ravvicinato), ignoriamo l'avvio
+        // e continuiamo a contare i passi senza azzerare il timer!
+        if (!isTracking) {
+            isTracking = true
+            timestampInizioCamminata = System.currentTimeMillis()
+            distanzaTotaleMetri = 0f
 
-        avviaServizioInForeground()
-        iniziaLetturaGPS()
+            avviaServizioInForeground()
+            iniziaLetturaGPS()
+        }
 
-        return START_STICKY // Riavvia il servizio se Android lo uccide per mancanza di RAM
+        return START_STICKY
     }
 
     private fun avviaServizioInForeground() {
@@ -83,6 +88,7 @@ class PedestrianTrackingService : Service() {
             .setContentText("Stiamo calcolando lo sforzo...")
             .setSmallIcon(android.R.drawable.ic_menu_directions)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "SONO ARRIVATO!", stopPendingIntent) // ECCO IL BOTTONE!
+            .setOngoing(true)
             .build()
 
         startForeground(3001, notifica)
@@ -128,24 +134,27 @@ class PedestrianTrackingService : Service() {
             return // Usciamo subito senza provare a salvare nel database!
         }
 
+        isTracking = false // Spegniamo il motore
         // 2. Fermiamo il GPS per non consumare batteria
         fusedLocationClient.removeLocationUpdates(locationCallback)
 
         // 3. Calcoliamo i secondi effettivi
         val durataSecondi = (System.currentTimeMillis() - timestampInizioCamminata) / 1000
 
-        val dao = it.unibo.lam2026.parkmate.model.AppDatabase.getDatabase(applicationContext).parcheggioDao()
+        val dao = AppDatabase.getDatabase(applicationContext).parcheggioDao()
 
         // Apriamo il thread di background per salvare
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        CoroutineScope(Dispatchers.IO).launch {
             try {
                 // Usiamo .first() preso in prestito da kotlinx.coroutines.flow.first
                 val parcheggiAttivi = dao.getParcheggiAttivi().first()
 
-                if (parcheggiAttivi.isNotEmpty()) {
-                    val parcheggioCorrente = parcheggiAttivi[0]
+                // --- NUOVA LOGICA (Risolve Bug 2) ---
+                // Invece di prendere solo il primo parcheggio, prendiamo TUTTI i parcheggi
+                // attivi che non hanno ancora ricevuto uno score!
+                val parcheggiSenzaScore = parcheggiAttivi.filter { it.parkingEffortScore == null }
 
-                    // Calcolo score
+                if (parcheggiSenzaScore.isNotEmpty()) {
                     val calcoloScore = when {
                         durataSecondi < 120 -> 1
                         durataSecondi < 300 -> 2
@@ -154,16 +163,16 @@ class PedestrianTrackingService : Service() {
                         else -> 5
                     }
 
-                    val parcheggioAggiornato = parcheggioCorrente.copy(
-                        distanzaPiediMetri = distanzaTotaleMetri,
-                        durataPiediSecondi = durataSecondi,
-                        parkingEffortScore = calcoloScore
-                    )
-                    dao.inserisciParcheggio(parcheggioAggiornato)
-
-                    Log.d("ParkMate_Effort", "Salvato su ${parcheggioCorrente.veicoloNome}! Metri: $distanzaTotaleMetri | Secondi: $durataSecondi | Score: $calcoloScore")
-                } else {
-                    Log.e("ParkMate_Effort", "Nessun parcheggio attivo a cui assegnare i dati.")
+                    // Assegnamo lo stesso score a TUTTI i parcheggi che hai fatto assieme!
+                    for (parcheggioCorrente in parcheggiSenzaScore) {
+                        val parcheggioAggiornato = parcheggioCorrente.copy(
+                            distanzaPiediMetri = distanzaTotaleMetri,
+                            durataPiediSecondi = durataSecondi,
+                            parkingEffortScore = calcoloScore
+                        )
+                        dao.inserisciParcheggio(parcheggioAggiornato)
+                        Log.d("ParkMate_Effort", "Assegnato a ${parcheggioCorrente.veicoloNome}! Score: $calcoloScore")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("ParkMate_Effort", "Errore DB: ${e.message}")
