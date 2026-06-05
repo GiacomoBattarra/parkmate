@@ -51,7 +51,7 @@
             android:id="@+id/radioFree"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Libero (Nessun costo)"
+            android:text="Gratis (Nessun costo)"
             android:checked="true"/> <RadioButton
         android:id="@+id/radioHourly"
         android:layout_width="match_parent"

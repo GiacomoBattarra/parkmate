@@ -155,14 +155,14 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
                 return@setOnClickListener
             }
 
-            var parkingType = "Libero"
+            var parkingType = "Gratis"
             var tariffaFinale = 0.0
             var scadenzaStimata: Long? = null
 
             // Analizziamo cosa ha scelto l'utente e leggiamo i numeri
             when (binding.radioGroupParkType.checkedRadioButtonId) {
                 binding.radioFree.id -> {
-                    parkingType = "Libero"
+                    parkingType = "Gratis"
                 }
                 binding.radioHourly.id -> {
                     parkingType = "A pagamento (Orario)"

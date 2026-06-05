@@ -81,7 +81,7 @@ class MainViewModel(private val repository: ParcheggioRepository) : ViewModel() 
         viewModelScope.launch(Dispatchers.IO) {
             val nuovo = SessioneParcheggio(
                 veicoloNome = "Mia Auto",
-                tipoParcheggio = "Libero",
+                tipoParcheggio = "Gratis",
                 latitudine = 44.4939,
                 longitudine = 11.3428,
                 startTimeStamp = System.currentTimeMillis()

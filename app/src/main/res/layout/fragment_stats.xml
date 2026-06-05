@@ -233,13 +233,16 @@
 
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
-            android:layout_height="280dp" android:layout_marginBottom="24dp"
+            android:layout_height="280dp"
+            android:layout_marginBottom="24dp"
             app:cardCornerRadius="16dp"
             app:cardElevation="2dp">
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:orientation="vertical">
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -252,10 +255,27 @@
                     android:textStyle="bold"
                     android:textSize="12sp"
                     android:letterSpacing="0.05" />
-                <org.osmdroid.views.MapView
-                    android:id="@+id/mapViewStats"
+
+                <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent" />
+                    android:layout_height="match_parent">
+
+                    <org.osmdroid.views.MapView
+                        android:id="@+id/mapViewStats"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+
+                    <ImageButton
+                        android:id="@+id/btnEspandiMappa"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:layout_gravity="top|end"
+                        android:layout_margin="8dp"
+                        android:background="#DDFFFFFF"
+                        android:src="@android:drawable/ic_menu_zoom"
+                        app:tint="#212121"
+                        android:elevation="4dp"/>
+                </FrameLayout>
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
