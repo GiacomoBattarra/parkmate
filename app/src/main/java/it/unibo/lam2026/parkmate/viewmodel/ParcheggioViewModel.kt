@@ -58,7 +58,7 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
             // A. Cerchiamo se la macchina è già parcheggiata altrove
             val vecchiaSessione = dao.getParcheggioAttivoPerVeicolo(nomeVeicolo)
 
-            // B. Se sì, la chiudiamo in automatico per tutti i casi (Libero, Fisso, Orario)
+            // B. Se sì, la chiudiamo in automatico per tutti i casi (Gratis, Fisso, Orario)
             if (vecchiaSessione != null) {
                 var costoCalcolato = 0.0
 
@@ -86,8 +86,7 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
                 // Chiudiamo il vecchio parcheggio nel database
                 dao.chiudiParcheggio(vecchiaSessione.id, tempoAttuale, costoCalcolato)
 
-                // --- NUOVO: MOSTRA L'AVVISO ALL'UTENTE ---
-                // Dobbiamo spostarci sul Thread Principale (Main) per mostrare roba grafica
+                // MOSTRA L'AVVISO ALL'UTENTE
                 withContext(Dispatchers.Main) {
                     Toast.makeText(
                         getApplication(),
@@ -185,6 +184,40 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
     fun cancellaParcheggio(sessionId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.archiviaParcheggio(sessionId)
+        }
+    }
+
+    // Gestione intelligente dell'eliminazione del veicolo
+    fun gestisciEliminazioneVeicolo(nomeVeicolo: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+
+            // 1. Controlliamo se c'è un parcheggio attualmente in corso
+            val sostaInCorso = dao.getParcheggioAttivoPerVeicolo(nomeVeicolo)
+
+            if (sostaInCorso != null) {
+                // Invece di cancellarlo, LO TERMINIAMO FORZATAMENTE!
+                val tempoDiFine = System.currentTimeMillis()
+                var costoCalcolato = 0.0
+
+                if (sostaInCorso.tariffa > 0.0) {
+                    if (sostaInCorso.tipoParcheggio.contains("Fiss", ignoreCase = true)) {
+                        costoCalcolato = sostaInCorso.tariffa
+                    } else {
+                        val minutiTrascorsi = (tempoDiFine - sostaInCorso.startTimeStamp).toDouble() / (1000.0 * 60.0)
+                        costoCalcolato = minutiTrascorsi * (sostaInCorso.tariffa / 60.0)
+                        costoCalcolato = Math.round(costoCalcolato * 100.0) / 100.0
+                    }
+                }
+
+                // Chiudiamo il parcheggio nel database (così finisce nello storico)
+                dao.chiudiParcheggio(sostaInCorso.id, tempoDiFine, costoCalcolato)
+            }
+
+            // 2. Usiamo una tag speciale e nascosta [ELIMINATO]
+            val nuovoNome = "$nomeVeicolo [ELIMINATO]"
+
+            // 3. Adesso che TUTTI i parcheggi di quell'auto sono nello storico, li etichettiamo in blocco!
+            dao.aggiornaNomeVeicoloNelloStorico(vecchioNome = nomeVeicolo, nuovoNome = nuovoNome)
         }
     }
 }
