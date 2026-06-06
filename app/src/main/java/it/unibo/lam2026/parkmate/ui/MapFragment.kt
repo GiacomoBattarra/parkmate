@@ -24,6 +24,8 @@ import it.unibo.lam2026.parkmate.R
 import it.unibo.lam2026.parkmate.model.AppDatabase
 import it.unibo.lam2026.parkmate.model.ParcheggioRepository
 import it.unibo.lam2026.parkmate.model.PosizioneSalvata
+import it.unibo.lam2026.parkmate.utils.ParkingAlarmReceiver
+import it.unibo.lam2026.parkmate.utils.PedestrianTrackingService
 import it.unibo.lam2026.parkmate.viewmodel.MainViewModel
 import it.unibo.lam2026.parkmate.viewmodel.MainViewModelFactory
 import it.unibo.lam2026.parkmate.viewmodel.PosizioniSalvateViewModel
@@ -141,6 +143,13 @@ class MapFragment : Fragment() {
                     segnaposto.relatedObject = parcheggio.id
                     segnaposto.infoWindow = ParkInfoWindow(binding.mapView) { idSessione ->
                         viewModel.terminaParcheggio(idSessione)
+
+                        // Ferma il tracciamento camminata se l'utente spegne tutto prima di fermarsi
+                        val stopIntent = android.content.Intent(requireContext(), PedestrianTrackingService::class.java).apply {
+                            action = "STOP_TRACKING"
+                        }
+                        requireContext().startService(stopIntent)
+
                         Toast.makeText(requireContext(), "Sosta terminata dalla mappa!", Toast.LENGTH_SHORT).show()
                     }
 

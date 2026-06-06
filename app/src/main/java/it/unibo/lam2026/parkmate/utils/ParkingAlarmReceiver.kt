@@ -1,5 +1,7 @@
 package it.unibo.lam2026.parkmate.utils
 
+import android.annotation.SuppressLint
+import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -62,5 +64,25 @@ class ParkingAlarmReceiver : BroadcastReceiver() {
 
         val notificationId = System.currentTimeMillis().toInt()
         notificationManager.notify(notificationId, builder.build())
+    }
+
+    // --- NUOVO: IL "TELECOMANDO" PER SPEGNERE LA NOTIFICA FANTASMA ---
+    companion object {
+        fun cancellaAllarme(context: Context, requestCode: Int) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+            val intent = Intent(context, ParkingAlarmReceiver::class.java).apply {
+                action = "SCADENZA_$requestCode" // <-- DEVE ESSERE IDENTICA A QUELLA SOPRA!
+            }
+
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+
+            alarmManager.cancel(pendingIntent)
+        }
     }
 }
