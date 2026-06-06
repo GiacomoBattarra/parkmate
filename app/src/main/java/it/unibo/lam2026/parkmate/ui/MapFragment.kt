@@ -262,6 +262,11 @@ class MapFragment : Fragment() {
 
             for (posizione in listaAggiornata) {
                 val markerCuore = org.osmdroid.views.overlay.Marker(binding.mapView)
+
+                // 0.5f = Centro esatto in orizzontale.
+                // 0.9f = Punta a 90% dell'altezza verso il basso (ignora l'ultimo 10% di spazio vuoto).
+                markerCuore.setAnchor(1f, 1f)
+
                 markerCuore.id = "PREFERITO"
                 markerCuore.position = org.osmdroid.util.GeoPoint(posizione.latitudine, posizione.longitudine)
 

@@ -10,7 +10,7 @@ data class SessioneParcheggio(
     val id: Long = 0,
 
     val veicoloNome: String,  // Colleghiamo il nome del veicolo
-    val tipoParcheggio: String, // "Libero", "Orario", "Fisso"
+    val tipoParcheggio: String, // "Gratis", "Orario", "Fisso"
     val latitudine: Double,
     val longitudine: Double,
     val startTimeStamp: Long, // Orario di inizio in millisecondi

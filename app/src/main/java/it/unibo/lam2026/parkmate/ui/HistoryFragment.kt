@@ -81,7 +81,7 @@ class HistoryFragment : Fragment() {
         )
         binding.recyclerViewHistory.adapter = adapter
 
-        val opzioniFiltroTipo = arrayOf("Tutti i Tipi", "Solo Liberi", "Solo Orario", "Solo Fissi")
+        val opzioniFiltroTipo = arrayOf("Tutti i Tipi", "Solo Gratis", "Solo Orario", "Solo Fissi")
         val spinnerTipoAdapter = android.widget.ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, opzioniFiltroTipo)
         spinnerTipoAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         binding.spinnerFiltroTipo.adapter = spinnerTipoAdapter
@@ -124,7 +124,7 @@ class HistoryFragment : Fragment() {
         var listaFiltrata = listaCompletaStorico
 
         listaFiltrata = when (selezioneTipo) {
-            1 -> listaFiltrata.filter { it.tipoParcheggio.contains("Libero", ignoreCase = true) || it.tipoParcheggio.contains("Gratis", ignoreCase = true) }
+            1 -> listaFiltrata.filter { it.tipoParcheggio.contains("Gratis", ignoreCase = true) || it.tipoParcheggio.contains("Gratis", ignoreCase = true) }
             2 -> listaFiltrata.filter { it.tipoParcheggio.contains("Orario", ignoreCase = true) }
             3 -> listaFiltrata.filter { it.tipoParcheggio.contains("Fiss", ignoreCase = true) }
             else -> listaFiltrata
