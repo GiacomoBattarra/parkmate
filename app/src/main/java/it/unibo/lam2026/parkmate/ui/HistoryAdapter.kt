@@ -137,11 +137,11 @@ class HistoryAdapter(
 
             // Invertiamo la logica UX: il valore più basso (1) ha il massimo delle stelle (5)!
             val valutazioneVisuale = when (sessione.parkingEffortScore) {
-                1 -> "⭐⭐⭐⭐⭐ (Ottimo - Sforzo Minimo)" // Meno di 2 min a piedi
-                2 -> "⭐⭐⭐⭐ (Buono)"                 // Tra 2 e 5 min a piedi
-                3 -> "⭐⭐⭐ (Medio)"                   // Tra 5 e 10 min a piedi
-                4 -> "⭐⭐ (Elevato)"                  // Tra 10 e 20 min a piedi
-                5 -> "⭐ (Critico - Sforzo Massimo)"   // Oltre 20 min a piedi
+                1 -> "⭐⭐⭐⭐⭐" // Meno di 2 min a piedi
+                2 -> "⭐⭐⭐⭐"                 // Tra 2 e 5 min a piedi
+                3 -> "⭐⭐⭐"                   // Tra 5 e 10 min a piedi
+                4 -> "⭐⭐"                  // Tra 10 e 20 min a piedi
+                5 -> "⭐"   // Oltre 20 min a piedi
                 else -> ""
             }
             holder.binding.tvHistoryEffort.text = "Valutazione Sosta: $valutazioneVisuale"
