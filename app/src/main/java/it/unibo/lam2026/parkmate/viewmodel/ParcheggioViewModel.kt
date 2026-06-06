@@ -56,6 +56,9 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
             parkingEffortScore = scoreCalcolato // [NUOVO] Passiamo il punteggio alla colonna del DB!
         )
 
+        //Cancella eventuali worker residui per questo veicolo (evita duplicati)
+        WorkManager.getInstance(getApplication()).cancelAllWorkByTag("SESSION_$nomeVeicolo")
+
         // GESTIONE DOPPIONI E SALVATAGGIO IN BACKGROUND
         viewModelScope.launch(Dispatchers.IO) {
 
@@ -66,7 +69,7 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
             if (vecchiaSessione != null) {
                 var costoCalcolato = 0.0
 
-                // Calcolo solo se c'è una tariffa (Fissa o Oraria)
+                // Calcolo solo se c'è una tariffa (Fissa od Oraria)
                 if (vecchiaSessione.tariffa > 0.0) {
                     if (vecchiaSessione.tipoParcheggio.contains("Fiss", ignoreCase = true)) {
                         costoCalcolato = vecchiaSessione.tariffa
@@ -111,7 +114,7 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
 
         // Avviamo il worker se è a pagamento orario
         if (tipo.contains("Orario")) {
-            val workRequest = PeriodicWorkRequestBuilder<ParkingSessionWorker>(15, TimeUnit.MINUTES)
+            val workRequest = PeriodicWorkRequestBuilder<ParkingSessionWorker>(1, TimeUnit.HOURS)
                 .addTag("SESSION_${nuovaSessione.veicoloNome}")
                 .build()
 
@@ -212,9 +215,8 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
                     }
                 }
                 dao.chiudiParcheggio(sessionId, tempoDiFine, costoCalcolato)
+                WorkManager.getInstance(getApplication()).cancelAllWorkByTag("SESSION_${sessione.veicoloNome}")
             }
-
-            WorkManager.getInstance(getApplication()).cancelAllWork()
         }
     }
 

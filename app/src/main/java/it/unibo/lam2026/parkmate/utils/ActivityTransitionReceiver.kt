@@ -16,20 +16,52 @@ import it.unibo.lam2026.parkmate.ui.MainActivity
 class ActivityTransitionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+
         if (ActivityTransitionResult.hasResult(intent)) {
+            // ====================================================================
+            // STRADA A: FLUSSO REALE (Google Play Services ha rilevato il movimento)
+            // ====================================================================
             val result = ActivityTransitionResult.extractResult(intent) ?: return
 
             for (event in result.transitionEvents) {
+
+                // ==========================================================
+                // CASO 1: L'UTENTE SCENDE DALL'AUTO (Inizia il parcheggio)
+                // ==========================================================
                 if (event.activityType == DetectedActivity.IN_VEHICLE &&
                     event.transitionType == com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_EXIT) {
 
-                    Log.d("ParkMate_AR", "Utente sceso dall'auto! Lancio la notifica.")
+                    Log.d("ParkMate_AR", "Sensore Reale: Utente sceso dall'auto! Salvo timestamp.")
+
                     val sharedPrefs = context.getSharedPreferences("ParkMatePrefs", Context.MODE_PRIVATE)
                     sharedPrefs.edit().putLong("KEY_DISCESA_AUTO_TIMESTAMP", System.currentTimeMillis()).apply()
 
                     inviaNotificaSosta(context)
                 }
+                // ==========================================================
+                // CASO 2 : L'UTENTE È ARRIVATO A DESTINAZIONE (Fermo)
+                // ==========================================================
+                if (event.activityType == DetectedActivity.STILL &&
+                    event.transitionType == com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER) {
+
+                    Log.d("ParkMate_AR", "Arrivo rilevato (STILL). Fermo il tracciamento della camminata.")
+
+                    // Mandiamo il segnale di STOP al nostro servizio
+                    val stopIntent = Intent(context, it.unibo.lam2026.parkmate.utils.PedestrianTrackingService::class.java).apply {
+                        action = "STOP_TRACKING"
+                    }
+                    context.startService(stopIntent)
+                }
             }
+        } else {
+            // ====================================================================
+            // STRADA B: FLUSSO DI DEBUG (È scattato il vostro "Bottone Segreto")
+            // ====================================================================
+            Log.d("ParkMate_AR", "Trigger Debug: Forzo l'apparizione della notifica.")
+
+            // NOTA: Il finto timestamp (es. -5 minuti) è già stato salvato
+            // dalla MainActivity nel metodo onLongClick, quindi qui lanciamo solo la notifica!
+            inviaNotificaSosta(context)
         }
     }
 
