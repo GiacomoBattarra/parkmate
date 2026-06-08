@@ -9,7 +9,7 @@ data class SessioneParcheggio(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
 
-    val veicoloNome: String,  // Colleghiamo il nome del veicolo
+    val veicoloNome: String,
     val tipoParcheggio: String, // "Gratis", "Orario", "Fisso"
     val latitudine: Double,
     val longitudine: Double,
@@ -19,7 +19,7 @@ data class SessioneParcheggio(
     val endTimeStamp: Long? = null,
     val costoTotale: Double? = null,
     val nota: String? = null,
-    val fotoPath: String? = null, // Percorso del file immagine sul telefono
+    val fotoPath: String? = null,
 
     val isAttivo: Boolean = true, // Di default, quando crei il record, il parcheggio è attivo
     @ColumnInfo(name = "archiviato") val archiviato: Boolean = false,

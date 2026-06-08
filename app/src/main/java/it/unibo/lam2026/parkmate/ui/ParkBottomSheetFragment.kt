@@ -6,7 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Toast
-// Usiamo activityViewModels per condividere i dati con la Mappa!
+// Condivisione dello scope del ViewModel con l'Activity host per la sincronizzazione dei dati con la mappa
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -29,20 +29,21 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
     private var _binding: FragmentParkBottomSheetBinding? = null
     private val binding get() = _binding!!
 
-    // CAMBIO IMPORTANTE: Usiamo activityViewModels così Mappa e BottomSheet comunicano istantaneamente
+    // Utilizzo di activityViewModels per garantire la sincronizzazione istantanea dello stato con MapFragment
     private val viewModel: ParcheggioViewModel by activityViewModels()
-    // --- VARIABILI PER LA FOTO ---
+
+    // Gestione dello stato e dell'URI per l'acquisizione di evidenze fotografiche
     private var fotoUri: android.net.Uri? = null
     private var percorsoFotoAssoluto: String? = null
 
-    // Preparo il "Lanciatore" che aspetta il risultato della fotocamera
+    // Inizializzazione dell'Activity Result Launcher per l'app fotocamera
     private val scattaFotoLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.TakePicture()) { successo ->
         if (successo) {
-            // La foto è stata scattata! Mostriamo l'anteprima nel quadratino
+            // Rendering dell'anteprima dell'immagine acquisita
             binding.imgAnteprimaFoto.setImageURI(fotoUri)
             binding.imgAnteprimaFoto.visibility = View.VISIBLE
         } else {
-            // L'utente ha chiuso la fotocamera senza scattare
+            // Reset del percorso in caso di annullamento dell'operazione
             percorsoFotoAssoluto = null
         }
     }
@@ -59,17 +60,17 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // 1. Estraiamo SUBITO le coordinate
+        // Estrazione delle coordinate correnti passate tramite bundle
         val latReale = arguments?.getDouble("LATITUDINE") ?: 0.0
         val lonReale = arguments?.getDouble("LONGITUDINE") ?: 0.0
 
-        // --- NUOVO: Teniamo in memoria i parcheggi attivi per controllare i doppioni! ---
+        // Caching locale delle sessioni attive per la validazione di eventuali duplicati
         var parcheggiInCorso: List<it.unibo.lam2026.parkmate.model.SessioneParcheggio> = emptyList()
         viewModel.parcheggiAttivi.observe(viewLifecycleOwner) { lista ->
             parcheggiInCorso = lista
         }
 
-        // 2. REVERSE GEOCODING (Traduzione Coordinate -> Indirizzo) in Background
+        // Esecuzione asincrona del Reverse Geocoding per non bloccare l'interfaccia utente
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val geocoder = Geocoder(requireContext(), Locale.getDefault())
@@ -84,19 +85,18 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
                     }
                 }
             } catch (e: Exception) {
-                // Ritorno sul thread principale per aggiornare la grafica
+                // Fallback sul Main thread in caso di indisponibilità dei servizi di geocoding (es. assenza di rete)
                 withContext(Dispatchers.Main) {
-                    // Arrotondiamo le coordinate a 4 decimali per non avere una sbrodolata di numeri sullo schermo
+                    // Formattazione delle coordinate a 4 decimali per una visualizzazione pulita nell'interfaccia
                     val latCorta = String.format(java.util.Locale.getDefault(), "%.4f", latReale)
                     val lonCorta = String.format(java.util.Locale.getDefault(), "%.4f", lonReale)
 
-                    // Mostriamo il messaggio amichevole con le coordinate!
                     binding.tvAddress.text = "📍 Non riesco a caricare l'indirizzo (Coord: $latCorta, $lonCorta)"
                 }
             }
         }
 
-        // 3. CARICAMENTO VEICOLI
+        // Inizializzazione repository e caricamento lista veicoli per lo spinner
         val dao = AppDatabase.getDatabase(requireContext()).veicoloDao()
         val repository = VeicoloRepository(dao)
         val factory = VeicoliViewModelFactory(repository)
@@ -125,9 +125,7 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
         }
         veicoliViewModel.caricaVeicoli()
 
-        // -------------------------------------------------------------------------
-        // [NUOVO] 4. DINAMISMO UI: Mostra o nascondi i campi tariffe al click
-        // -------------------------------------------------------------------------
+        // Gestione dinamica della visibilità dei campi tariffari in base alla tipologia di sosta selezionata
         binding.radioGroupParkType.setOnCheckedChangeListener { _, checkedId ->
             when (checkedId) {
                 binding.radioFree.id -> {
@@ -145,9 +143,7 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
             }
         }
 
-        // -------------------------------------------------------------------------
-        // 5. SALVATAGGIO DEI DATI (Con avviso di sovrascrittura!)
-        // -------------------------------------------------------------------------
+        // Elaborazione, validazione e salvataggio dei dati relativi alla nuova sessione di parcheggio
         binding.btnConfirmPark.setOnClickListener {
             val selectedVehicle = binding.spinnerVehicles.selectedItem?.toString() ?: ""
 
@@ -160,7 +156,7 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
             var tariffaFinale = 0.0
             var scadenzaStimata: Long? = null
 
-            // Analizziamo cosa ha scelto l'utente e leggiamo i numeri
+            // Parsing e validazione dei parametri tariffari in base alla modalità scelta
             when (binding.radioGroupParkType.checkedRadioButtonId) {
                 binding.radioFree.id -> {
                     parkingType = "Gratis"
@@ -182,7 +178,7 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
                         scadenzaStimata = System.currentTimeMillis() + (minuti * 60 * 1000)
                     } else {
                         Toast.makeText(requireContext(), "Inserisci una durata valida in minuti!", Toast.LENGTH_SHORT).show()
-                        return@setOnClickListener // Blocca tutto se non mette i minuti!
+                        return@setOnClickListener
                     }
                 }
                 else -> {
@@ -191,12 +187,10 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
                 }
             }
 
-            // --- NUOVA LOGICA: Controllo Sovrascrittura ---
-
-            // 1. Controlliamo se il veicolo è già parcheggiato guardando la nostra lista aggiornata
+            // Verifica l'esistenza di conflitti di stato (es. veicolo già in sosta)
             val isAlreadyParked = parcheggiInCorso.any { it.veicoloNome == selectedVehicle }
 
-            // 2. Creiamo una "mini-funzione" con il salvataggio vero e proprio
+            // Lambda che incapsula la logica di persistenza e l'avvio del tracking pedonale
             val eseguiSalvataggio = {
                 val notaInserita = binding.etNotaParcheggio.text.toString().takeIf { it.isNotBlank() }
 
@@ -210,47 +204,45 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
                     nota = notaInserita,
                     fotoPath = percorsoFotoAssoluto
                 )
-                // AVVIO IL MOTORE DI TRACCIAMENTO CAMMINATA (Spostato qui dentro!)
+
+                // Avvio del servizio in foreground per il calcolo della distanza a piedi
                 val serviceIntent = android.content.Intent(requireContext(), PedestrianTrackingService::class.java)
                 androidx.core.content.ContextCompat.startForegroundService(requireContext(), serviceIntent)
 
                 Toast.makeText(requireContext(), "Parcheggio iniziato!", Toast.LENGTH_SHORT).show()
-                dismiss() // Chiude il BottomSheet
+                dismiss()
             }
 
-            // 3. Decidiamo cosa fare
+            // Gestione dei conflitti: richiede esplicita conferma all'utente per sovrascrivere una sosta attiva
             if (isAlreadyParked) {
-                // L'auto è già parcheggiata: mostriamo il pop-up di conferma!
                 com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
                     .setTitle("⚠️ Veicolo già in sosta!")
                     .setMessage("Attenzione: '$selectedVehicle' risulta già parcheggiato altrove.\n\nVuoi terminare la sosta precedente e iniziarne una nuova qui?")
                     .setPositiveButton("Sì, sostituisci") { _, _ ->
-                        eseguiSalvataggio() // L'utente conferma, andiamo avanti
+                        eseguiSalvataggio()
                     }
                     .setNegativeButton("No, annulla") { dialog, _ ->
-                        dialog.dismiss() // L'utente rifiuta, chiudiamo solo l'avviso e non facciamo nulla!
+                        dialog.dismiss()
                     }
                     .show()
             } else {
-                // L'auto è libera: salviamo direttamente senza fastidiosi pop-up
+                // Nessun conflitto rilevato, procede direttamente con il salvataggio
                 eseguiSalvataggio()
             }
         }
 
-        // --- CLICK SUL BOTTONE FOTOCAMERA ---
+        // Preparazione del FileProvider e avvio dell'intent per la fotocamera
         binding.btnScattaFoto.setOnClickListener {
             try {
-                // 1. Creiamo il file vuoto
                 val fileFoto = creaFileImmagine()
 
-                // 2. Generiamo l'URI sicuro tramite il FileProvider (DEVE combaciare con il Manifest)
+                // Generazione di un URI sicuro tramite FileProvider, coerente con le autorizzazioni del Manifest
                 fotoUri = androidx.core.content.FileProvider.getUriForFile(
                     requireContext(),
                     "${requireContext().packageName}.fileprovider",
                     fileFoto
                 )
 
-                // 3. Lanciamo la fotocamera passandole l'URI sicuro!
                 scattaFotoLauncher.launch(fotoUri)
 
             } catch (e: Exception) {
@@ -266,21 +258,19 @@ class ParkBottomSheetFragment : BottomSheetDialogFragment() {
     }
 
     private fun creaFileImmagine(): java.io.File {
-        // Creiamo un nome unico basato sulla data e ora attuale
+        // Generazione di un nome file univoco basato sul timestamp corrente
         val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())
         val nomeFile = "JPEG_${timeStamp}_"
 
-        // Usiamo la cartella Cache sicura (quella che abbiamo autorizzato nel file_paths.xml)
+        // Utilizzo della directory cache esterna (configurata in file_paths.xml)
         val cartellaStorage = requireContext().externalCacheDir
 
-        // Creiamo il file fisico
+        // Creazione fisica del file temporaneo
         val fileImmagine = java.io.File.createTempFile(nomeFile, ".jpg", cartellaStorage)
 
-        // Salviamo il percorso assoluto da mandare al Database!
+        // Memorizzazione del percorso assoluto per l'inserimento nel database Room
         percorsoFotoAssoluto = fileImmagine.absolutePath
 
         return fileImmagine
     }
-
-
 }

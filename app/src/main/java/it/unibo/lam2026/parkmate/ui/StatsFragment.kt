@@ -36,12 +36,12 @@ class StatsFragment : Fragment() {
 
     private var listaCompletaParcheggi: List<SessioneParcheggio> = emptyList()
 
-    // Memoria per sapere esattamente quali puntini disegnare quando si apre il full screen
+    // Cache locale delle sessioni attualmente filtrate, necessaria per il corretto rendering nella vista a schermo intero
     private var parcheggiCorrentiSullaMappa: List<SessioneParcheggio> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Inizializza la configurazione di osmdroid con il contesto dell'app
+        // Inizializzazione della configurazione OSMDroid con i parametri applicativi
         Configuration.getInstance().load(
             requireContext(),
             PreferenceManager.getDefaultSharedPreferences(requireContext())
@@ -65,21 +65,21 @@ class StatsFragment : Fragment() {
         adapterSpinner.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         binding.spinnerTimeFilter.adapter = adapterSpinner
 
-        // --- CONFIGURAZIONE MAPPA HEATMAP ---
+        // Configurazione della MapView per la visualizzazione della Heatmap
         binding.mapViewStats.setTileSource(org.osmdroid.tileprovider.tilesource.TileSourceFactory.MAPNIK)
         binding.mapViewStats.setMultiTouchControls(true)
         binding.mapViewStats.controller.setZoom(15.0)
 
-        // Centro di default (Bologna)
+        // Impostazione del centro mappa predefinito (Bologna)
         binding.mapViewStats.controller.setCenter(GeoPoint(44.4949, 11.3426))
 
-        // Effetto bianco e nero per la mappa
+        // Applicazione di un filtro di desaturazione per far risaltare i poligoni colorati della heatmap
         val colorMatrix = ColorMatrix()
         colorMatrix.setSaturation(0f)
         val filter = ColorMatrixColorFilter(colorMatrix)
         binding.mapViewStats.overlayManager.tilesOverlay.setColorFilter(filter)
 
-        // Pulsante Espandi
+        // Configurazione del listener per l'apertura del modulo mappa espanso
         binding.btnEspandiMappa.setOnClickListener {
             mostraMappaFullScreen()
         }
@@ -111,7 +111,7 @@ class StatsFragment : Fragment() {
 
                         impostaGrafico(listaFiltrata)
 
-                        // Salviamo i dati in memoria e disegniamo la mappa piccola
+                        // Aggiornamento cache in-memory e dispatch del rendering sulla mappa in formato preview
                         parcheggiCorrentiSullaMappa = listaFiltrata
                         disegnaHeatmap(parcheggiCorrentiSullaMappa, binding.mapViewStats)
 
@@ -132,7 +132,7 @@ class StatsFragment : Fragment() {
         }
     }
 
-    // --- Funzione per creare il Pop-Up a tutto schermo ---
+    // Costruisce e visualizza un Dialog a schermo intero contenente un'istanza dedicata della MapView
     private fun mostraMappaFullScreen() {
         if (_binding == null) return
 
@@ -172,7 +172,7 @@ class StatsFragment : Fragment() {
         dialogFullScreen.setContentView(layoutContenitore)
         dialogFullScreen.show()
 
-        // Disegna i dati sulla mappa gigante passando l'istanza corretta
+        // Propaga il set di dati corrente per il rendering sull'istanza estesa
         disegnaHeatmap(parcheggiCorrentiSullaMappa, mappaGigante)
     }
 
@@ -302,12 +302,12 @@ class StatsFragment : Fragment() {
         return Color.argb(180, red, green, 0)
     }
 
-    // Sistemata: ora accetta esplicitamente su quale mappa disegnare!
+    // Esegue il rendering dei dati spaziali (Heatmap) su una MapView specifica
     private fun disegnaHeatmap(listaParcheggi: List<SessioneParcheggio>, mappaTarget: org.osmdroid.views.MapView) {
-        // 1. Puliamo i vecchi disegni sulla mappa target passata
+        // Rimozione dei layer (overlay) preesistenti per evitare artefatti visivi o sovrapposizioni
         mappaTarget.overlays.removeAll { it is Polygon && it.id == "effort_circle" }
 
-        // 2. Filtriamo solo i parcheggi che hanno effettivamente uno score calcolato
+        // Filtraggio delle sessioni prive di indicatore di sforzo calcolato
         val sessioniConScore = listaParcheggi.filter { it.parkingEffortScore != null }
 
         if (sessioniConScore.isEmpty()) {

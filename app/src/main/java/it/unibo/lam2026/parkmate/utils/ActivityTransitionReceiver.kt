@@ -18,16 +18,12 @@ class ActivityTransitionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
 
         if (ActivityTransitionResult.hasResult(intent)) {
-            // ====================================================================
-            // STRADA A: FLUSSO REALE (Google Play Services ha rilevato il movimento)
-            // ====================================================================
+            // Elaborazione degli eventi generati dalle API di Google Play Services (Activity Recognition)
             val result = ActivityTransitionResult.extractResult(intent) ?: return
 
             for (event in result.transitionEvents) {
 
-                // ==========================================================
-                // CASO 1: L'UTENTE SCENDE DALL'AUTO (Inizia il parcheggio)
-                // ==========================================================
+                // Rilevamento uscita dal veicolo: memorizzazione del timestamp per il tracciamento della sosta
                 if (event.activityType == DetectedActivity.IN_VEHICLE &&
                     event.transitionType == com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_EXIT) {
 
@@ -38,15 +34,14 @@ class ActivityTransitionReceiver : BroadcastReceiver() {
 
                     inviaNotificaSosta(context)
                 }
-                // ==========================================================
-                // CASO 2 : L'UTENTE È ARRIVATO A DESTINAZIONE (Fermo)
-                // ==========================================================
+
+                // Rilevamento stato di fermo (raggiungimento destinazione): interruzione del tracking pedonale
                 if (event.activityType == DetectedActivity.STILL &&
                     event.transitionType == com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER) {
 
                     Log.d("ParkMate_AR", "Arrivo rilevato (STILL). Fermo il tracciamento della camminata.")
 
-                    // Mandiamo il segnale di STOP al nostro servizio
+                    // Dispatch dell'intent di terminazione al servizio in background dedicato
                     val stopIntent = Intent(context, it.unibo.lam2026.parkmate.utils.PedestrianTrackingService::class.java).apply {
                         action = "STOP_TRACKING"
                     }
@@ -54,13 +49,10 @@ class ActivityTransitionReceiver : BroadcastReceiver() {
                 }
             }
         } else {
-            // ====================================================================
-            // STRADA B: FLUSSO DI DEBUG (È scattato il vostro "Bottone Segreto")
-            // ====================================================================
+            // Gestione del flusso di testing (Mock): attivazione manuale del broadcast bypassando il sensore
             Log.d("ParkMate_AR", "Trigger Debug: Forzo l'apparizione della notifica.")
 
-            // NOTA: Il finto timestamp (es. -5 minuti) è già stato salvato
-            // dalla MainActivity nel metodo onLongClick, quindi qui lanciamo solo la notifica!
+            // Il timestamp simulato viene preconfigurato dall'interfaccia chiamante, si procede con il push della notifica
             inviaNotificaSosta(context)
         }
     }
@@ -78,10 +70,10 @@ class ActivityTransitionReceiver : BroadcastReceiver() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        // Prepariamo l'intent per aprire la MainActivity portandoci dietro un flag
+        // Configurazione dell'Intent per il routing automatico verso il frammento mappa all'apertura dell'applicazione
         val apriAppIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            putExtra("APRI_SCHERMO_PARCHEGGIO", true) // Il nostro messaggio segreto!
+            putExtra("APRI_SCHERMO_PARCHEGGIO", true)
         }
 
         val pendingIntent = PendingIntent.getActivity(

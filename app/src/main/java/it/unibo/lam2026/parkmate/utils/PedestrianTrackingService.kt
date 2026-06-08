@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+
 class PedestrianTrackingService : Service() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -29,7 +30,7 @@ class PedestrianTrackingService : Service() {
     private var distanzaTotaleMetri: Float = 0f
     private var timestampInizioCamminata: Long = 0
 
-    // NUOVO: Flag per evitare che il servizio si riavvii da zero se stiamo già tracciando
+    // Flag di stato per impedire l'azzeramento accidentale delle metriche in caso di riavvii concorrenti del servizio
     private var isTracking = false
 
     override fun onCreate() {
@@ -43,9 +44,7 @@ class PedestrianTrackingService : Service() {
             return START_NOT_STICKY
         }
 
-        // NUOVO CONTROLLO (Risolve Bug 2):
-        // Se stiamo GIÀ tracciando (es. 2° parcheggio ravvicinato), ignoriamo l'avvio
-        // e continuiamo a contare i passi senza azzerare il timer!
+        // Ignora i tentativi di avvio sovrapposti per mantenere la continuità del tracciamento corrente
         if (!isTracking) {
             isTracking = true
             timestampInizioCamminata = System.currentTimeMillis()
@@ -71,7 +70,7 @@ class PedestrianTrackingService : Service() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        // --- NUOVO: Prepariamo il segnale "STOP" per il bottone ---
+        // Configurazione dell'Intent per consentire l'interruzione manuale del servizio direttamente dalla notifica
         val stopIntent = Intent(this, PedestrianTrackingService::class.java).apply {
             action = "STOP_TRACKING"
         }
@@ -82,12 +81,11 @@ class PedestrianTrackingService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        // Creiamo la notifica con il bottone extra
         val notifica: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("🚶 ParkMate: Camminata in corso")
             .setContentText("Stiamo calcolando lo sforzo...")
             .setSmallIcon(android.R.drawable.ic_menu_directions)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "SONO ARRIVATO!", stopPendingIntent) // ECCO IL BOTTONE!
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "SONO ARRIVATO!", stopPendingIntent)
             .setOngoing(true)
             .build()
 
@@ -95,16 +93,16 @@ class PedestrianTrackingService : Service() {
     }
 
     private fun iniziaLetturaGPS() {
-        // Configuriamo ogni quanto vogliamo un punto GPS (Es. ogni 3 secondi, alta precisione)
+        // Configurazione dei parametri di campionamento spaziale e temporale
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000)
-            .setMinUpdateDistanceMeters(2f) // Aggiorna solo se l'utente fa almeno 2 metri (filtra i tremolii GPS)
+            .setMinUpdateDistanceMeters(2f)
             .build()
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 for (location in locationResult.locations) {
                     if (ultimaPosizione != null) {
-                        // CALCOLO DISTANZA: La magia matematica nativa di Android
+                        // Calcolo incrementale della distanza lineare tra le coordinate rilevate
                         val distanzaParziale = ultimaPosizione!!.distanceTo(location)
                         distanzaTotaleMetri += distanzaParziale
                         Log.d("ParkMate_Effort", "Percorsi: $distanzaTotaleMetri metri")
@@ -126,32 +124,28 @@ class PedestrianTrackingService : Service() {
     }
 
     private fun fermaTracciamento() {
-        // 1. CONTROLLO DI SICUREZZA ANTI-CRASH
-        // Se non abbiamo mai inizializzato la lettura GPS, significa che il tracking non era mai partito.
+        // Verifica di sicurezza: assicura che il callback sia stato inizializzato prima di tentarne la deregistrazione
         if (!::locationCallback.isInitialized) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
-            return // Usciamo subito senza provare a salvare nel database!
+            return
         }
 
-        isTracking = false // Spegniamo il motore
-        // 2. Fermiamo il GPS per non consumare batteria
+        isTracking = false
+
+        // Deregistrazione del listener GPS per ottimizzare il consumo energetico
         fusedLocationClient.removeLocationUpdates(locationCallback)
 
-        // 3. Calcoliamo i secondi effettivi
         val durataSecondi = (System.currentTimeMillis() - timestampInizioCamminata) / 1000
 
         val dao = AppDatabase.getDatabase(applicationContext).parcheggioDao()
 
-        // Apriamo il thread di background per salvare
+        // Operazioni di I/O sul database eseguite in background per preservare la fluidità del Main Thread
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // Usiamo .first() preso in prestito da kotlinx.coroutines.flow.first
                 val parcheggiAttivi = dao.getParcheggiAttivi().first()
 
-                // --- NUOVA LOGICA (Risolve Bug 2) ---
-                // Invece di prendere solo il primo parcheggio, prendiamo TUTTI i parcheggi
-                // attivi che non hanno ancora ricevuto uno score!
+                // Identificazione delle sessioni di sosta che necessitano del calcolo dello sforzo pedonale
                 val parcheggiSenzaScore = parcheggiAttivi.filter { it.parkingEffortScore == null }
 
                 if (parcheggiSenzaScore.isNotEmpty()) {
@@ -163,7 +157,7 @@ class PedestrianTrackingService : Service() {
                         else -> 5
                     }
 
-                    // Assegnamo lo stesso score a TUTTI i parcheggi che hai fatto assieme!
+                    // Propagazione dell'Effort Score a tutte le sessioni contemporanee
                     for (parcheggioCorrente in parcheggiSenzaScore) {
                         val parcheggioAggiornato = parcheggioCorrente.copy(
                             distanzaPiediMetri = distanzaTotaleMetri,
@@ -177,7 +171,7 @@ class PedestrianTrackingService : Service() {
             } catch (e: Exception) {
                 Log.e("ParkMate_Effort", "Errore DB: ${e.message}")
             } finally {
-                // SPEGNIAMO IL SERVIZIO SOLO DOPO AVER SALVATO I DATI!
+                // Terminazione formale del servizio delegata al completamento delle routine di persistenza
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }

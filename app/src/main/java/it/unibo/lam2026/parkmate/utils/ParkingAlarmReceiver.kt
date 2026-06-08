@@ -37,7 +37,7 @@ class ParkingAlarmReceiver : BroadcastReceiver() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        // 1. [NUOVO] Intento per APRIRE L'APP quando l'utente tocca la notifica!
+        // Configurazione dell'Intent per l'apertura dell'applicazione al tap sulla notifica
         val apriAppIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -48,31 +48,33 @@ class ParkingAlarmReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // 2. [NUOVO] Design elegante della notifica
+        // Costruzione e formattazione visiva della notifica
         val builder = NotificationCompat.Builder(context, channelId)
-            // Usiamo un'iconina standard di Android legata al tempo/eventi (o mettine una tua personalizzata!)
+            // Punto di estensione: personalizzazione dell'icona vettoriale
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle("🚗 ParkMate: Scadenza $veicolo")
             .setContentText(messaggio)
-            // Stile Espanso: se il testo è lungo, Android permette all'utente di espandere la tendina
+            // Abilitazione del BigTextStyle per supportare testi multilinea nel notification drawer
             .setStyle(NotificationCompat.BigTextStyle().bigText(messaggio))
-            // Tinge l'icona del colore principale della tua app (blu/viola di default)
             .setColor(android.graphics.Color.BLUE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true) // La notifica sparisce quando la tocchi
-            .setContentIntent(pendingIntent) // Aggancia l'apertura dell'app!
+            // Rimozione automatica dal drawer dopo l'interazione
+            .setAutoCancel(true)
+            // Binding del PendingIntent per la navigazione
+            .setContentIntent(pendingIntent)
 
         val notificationId = System.currentTimeMillis().toInt()
         notificationManager.notify(notificationId, builder.build())
     }
 
-    // --- NUOVO: IL "TELECOMANDO" PER SPEGNERE LA NOTIFICA FANTASMA ---
+    // Metodo di utility per la cancellazione degli allarmi pendenti legati a soste concluse anticipatamente
     companion object {
         fun cancellaAllarme(context: Context, requestCode: Int) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
             val intent = Intent(context, ParkingAlarmReceiver::class.java).apply {
-                action = "SCADENZA_$requestCode" // <-- DEVE ESSERE IDENTICA A QUELLA SOPRA!
+                // L'azione deve corrispondere esattamente a quella utilizzata in fase di schedulazione
+                action = "SCADENZA_$requestCode"
             }
 
             val pendingIntent = PendingIntent.getBroadcast(

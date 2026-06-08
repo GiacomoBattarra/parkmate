@@ -5,18 +5,14 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-// ECCO LA MODIFICA: Ora ci sono tutte e 3 le tabelle!
 @Database(entities = [SessioneParcheggio::class, Veicolo::class, PosizioneSalvata::class], version = 9, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
-    // I tuoi DAO esistenti
     abstract fun parcheggioDao(): ParcheggioDao
     abstract fun veicoloDao(): VeicoloDao
 
-    // Il nuovo DAO per i preferiti
     abstract fun posizioneSalvataDao(): PosizioneSalvataDao
 
-    // Blocco per il Singleton (Istanza unica)
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
@@ -28,7 +24,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "parkmate_database" // Nome del file fisico
                 )
-                    // Questa riga ci salva la vita: cancella il vecchio DB e lo ricrea aggiornato
+                    // Ricrea il database in caso di cambio versione (comporta la perdita dei dati)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

@@ -17,7 +17,6 @@ interface PosizioneSalvataDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertPosizione(posizione: PosizioneSalvata)
 
-    // --- NUOVO: Funzione per aggiornare il nome ---
     @Update
     fun updatePosizione(posizione: PosizioneSalvata)
 

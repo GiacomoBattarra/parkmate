@@ -5,9 +5,9 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "tabella_veicoli")
 data class Veicolo(
-    // autogenerate = true fa sì che Room crei un ID 1, 2, 3... da solo!
+    // autogenerate = true fa sì che Room crei un ID 1, 2, 3 automaticamente
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-    val nome: String, // es. "Panda di Mario"
-    val tipo: String  // es. "Auto", "Moto" o "Bici"
+    val nome: String,
+    val tipo: String
 )

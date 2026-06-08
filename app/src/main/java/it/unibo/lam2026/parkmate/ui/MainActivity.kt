@@ -24,20 +24,21 @@ import it.unibo.lam2026.parkmate.utils.ActivityTransitionReceiver
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    // Rendi il navController globale per poterlo usare fuori da onCreate
+
+    // NavController reso globale per consentire il routing programmatico da Intent esterni
     private lateinit var navController: androidx.navigation.NavController
-    // Launcher esistente per le notifiche
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
             Log.d("ParkMate", "Permesso notifiche accordato")
         }
-        // [NUOVO] Una volta gestite le notifiche, chiediamo il permesso per l'Activity Recognition
+        // Catena dei permessi: dopo le notifiche, procede con la richiesta per l'Activity Recognition
         chiediPermessoActivityRecognition()
     }
 
-    // [NUOVO] Launcher specifico per il permesso di Activity Recognition
+    // Gestione della risposta al permesso di rilevamento dell'attività fisica
     private val requestActivityLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -60,7 +61,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.bottomNavigation.setupWithNavController(navController)
 
-        // Selezioniamo il PRIMO pulsante (la Mappa) invece dell'intera barra
+        // Associa un trigger di testing (Easter Egg) per simulare l'evento di discesa auto
         val tabMappa = binding.bottomNavigation.findViewById<android.view.View>(binding.bottomNavigation.menu.getItem(0).itemId)
 
         tabMappa.setOnLongClickListener {
@@ -74,28 +75,26 @@ class MainActivity : AppCompatActivity() {
             val fintoIntentSensore = Intent(this, ActivityTransitionReceiver::class.java)
             sendBroadcast(fintoIntentSensore)
 
-            true // Obbligatorio per consumare il long click
+            true
         }
 
-        // Facciamo partire la catena dei permessi all'avvio
+        // Inizializza il flusso dei permessi e verifica se l'app è stata aperta tramite una notifica
         chiediPermessoNotifiche()
-        //Controlliamo se l'app è stata aperta dalla notifica di sosta
         gestisciIntentNotifica(intent)
     }
 
-    // Reindirizza l'utente sulla mappa invece di aprire subito il pannello
+    // Gestisce il reindirizzamento forzato alla mappa in seguito all'interazione con la notifica di sosta
     private fun gestisciIntentNotifica(intent: Intent?) {
         if (intent != null && intent.getBooleanExtra("APRI_SCHERMO_PARCHEGGIO", false)) {
             Log.d("ParkMate", "Notifica cliccata! Reindirizzo sulla mappa.")
 
-            // Sfruttiamo il navController che ora è globale!
             try {
                 navController.navigate(R.id.mapFragment)
             } catch (e: Exception) {
                 Log.e("ParkMate", "Errore navigazione: ${e.message}")
             }
 
-            // [FONDAMENTALE] Rimuovi il flag per evitare bug ruotando lo schermo
+            // Rimuove l'extra per evitare cicli di navigazione errati in caso di ricreazione dell'Activity (es. rotazione)
             intent.removeExtra("APRI_SCHERMO_PARCHEGGIO")
         }
     }
@@ -112,7 +111,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // [NUOVO] Funzione per verificare e richiedere il permesso di movimento
     private fun chiediPermessoActivityRecognition() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
@@ -121,32 +119,30 @@ class MainActivity : AppCompatActivity() {
                 setupActivityTransitions()
             }
         } else {
-            // Su versioni vecchie di Android il permesso era automatico se presente nel Manifest
+            // Retrocompatibilità: su versioni precedenti ad Android 10 (Q) il permesso viene concesso tramite Manifest
             setupActivityTransitions()
         }
     }
 
-    // [NUOVO] Configurazione e registrazione del monitoraggio dei sensori Google
+    // Registrazione del monitoraggio transizioni tramite le API di Google Play Services
     private fun setupActivityTransitions() {
-        // Definiamo quale evento ci interessa: uscire (EXIT) da un veicolo (IN_VEHICLE)
+        // Rilevamento uscita dal veicolo
         val transizioneUscitaAuto = ActivityTransition.Builder()
             .setActivityType(DetectedActivity.IN_VEHICLE)
-            .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_EXIT) // <-- Cambiato qui!
+            .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_EXIT)
             .build()
 
-        // Utente che si ferma (Arrivo a destinazione)
+        // Rilevamento stato di fermo prolungato
         val transizioneFermo = ActivityTransition.Builder()
             .setActivityType(DetectedActivity.STILL)
-            .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER) // ENTER = inizia a stare fermo
+            .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
             .build()
 
-        // Passiamo ENTRAMBE le regole a Google
         val request = ActivityTransitionRequest(listOf(transizioneUscitaAuto, transizioneFermo))
 
-        // Prepariamo l'intent per svegliare il Receiver creato nello Step 2
         val intent = Intent(this, ActivityTransitionReceiver::class.java)
 
-        // ATTENZIONE: FLAG_MUTABLE è obbligatorio qui!
+        // FLAG_MUTABLE è obbligatorio per permettere al sistema di popolare l'Intent con gli extra del sensore
         val pendingIntent = PendingIntent.getBroadcast(
             this,
             1001,
@@ -154,7 +150,6 @@ class MainActivity : AppCompatActivity() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
 
-        // Registriamo la richiesta su Google Play Services
         try {
             ActivityRecognition.getClient(this)
                 .requestActivityTransitionUpdates(request, pendingIntent)

@@ -12,7 +12,7 @@ class VeicoloAdapter(
     private var listaVeicoli: List<Veicolo>,
     private val onEliminaClick: (Veicolo) -> Unit,
     private val onModificaClick: (Veicolo) -> Unit,
-    private val onParcheggioAttivoClick: (Veicolo) -> Unit // 👇 NUOVO: Ascoltatore per il click sulla P!
+    private val onParcheggioAttivoClick: (Veicolo) -> Unit
 ) : RecyclerView.Adapter<VeicoloAdapter.VeicoloViewHolder>() {
 
     private var veicoliParcheggiati: List<String> = emptyList()
@@ -30,14 +30,14 @@ class VeicoloAdapter(
         holder.binding.txtNomeVeicolo.text = veicoloAttuale.nome
         holder.binding.txtTipoVeicolo.text = veicoloAttuale.tipo
 
-        // Gestione icone
+        // Assegnazione dinamica dell'icona in base alla categoria del veicolo
         when (veicoloAttuale.tipo.lowercase()) {
             "auto" -> holder.binding.imgTipoVeicolo.setImageResource(R.drawable.ic_car)
             "moto" -> holder.binding.imgTipoVeicolo.setImageResource(R.drawable.ic_motorcycle)
             "bici" -> holder.binding.imgTipoVeicolo.setImageResource(R.drawable.ic_bike)
         }
 
-        // CONTROLLO STATO PARCHEGGIO ATTIVO
+        // Verifica e aggiornamento visivo dello stato di parcheggio (sosta in corso)
         val stringaIdentificativa = "${veicoloAttuale.nome} (${veicoloAttuale.tipo})"
 
         if (veicoliParcheggiati.contains(stringaIdentificativa)) {
@@ -46,17 +46,17 @@ class VeicoloAdapter(
             holder.binding.imgStatoParcheggio.visibility = View.GONE
         }
 
-        // 👇 NUOVO: Click sulla P 👇
+        // Callback per la visualizzazione dei dettagli della sosta attiva
         holder.binding.imgStatoParcheggio.setOnClickListener {
             onParcheggioAttivoClick(veicoloAttuale)
         }
 
-        // Click sul Cestino
+        // Callback per la richiesta di eliminazione del veicolo dal database
         holder.binding.btnEliminaVeicolo.setOnClickListener {
             onEliminaClick(veicoloAttuale)
         }
 
-        // Click sulla Matitina
+        // Callback per l'apertura del modulo di modifica anagrafica del veicolo
         holder.binding.btnModificaVeicolo.setOnClickListener {
             onModificaClick(veicoloAttuale)
         }

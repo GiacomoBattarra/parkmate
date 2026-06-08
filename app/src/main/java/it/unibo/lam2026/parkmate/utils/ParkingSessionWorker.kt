@@ -19,39 +19,38 @@ class ParkingSessionWorker(
     workerParams: WorkerParameters
 ) : CoroutineWorker(context, workerParams) {
 
-    // doWork() viene eseguito in automatico in background da Android
+    // Punto di ingresso del Worker per l'esecuzione asincrona in background schedulata dal sistema
     override suspend fun doWork(): Result {
 
-        // 1. Apriamo il database
+        // Inizializzazione del Data Access Object per l'accesso locale
         val dao = AppDatabase.getDatabase(context).parcheggioDao()
 
-        // Leggiamo la lista attuale dei parcheggi attivi (usiamo .first() per estrarre la lista dal Flow)
+        // Recupero dello snapshot corrente dei parcheggi attivi consumando il Flow
         val parcheggiAttivi = dao.getParcheggiAttivi().first()
 
-        // 2. Filtriamo SOLO i parcheggi a pagamento orario
+        // Isolamento delle sessioni soggette a tariffazione oraria progressiva
         val sosteOravie = parcheggiAttivi.filter { it.tipoParcheggio.contains("Orario") }
 
-        // Se non ci sono soste orarie attive, diciamo ad Android che il lavoro è finito con successo
+        // Termina anticipatamente il task in assenza di sessioni rilevanti, risparmiando risorse
         if (sosteOravie.isEmpty()) {
             return Result.success()
         }
 
-        // 3. Per ogni sosta oraria attiva, calcoliamo il costo e spariamo la notifica
+        // Calcolo dinamico della spesa maturata e aggiornamento dei promemoria per l'utente
         val tempoAttuale = System.currentTimeMillis()
 
         for (sosta in sosteOravie) {
-            // Calcolo del tempo trascorso in ORE (con i decimali, es. 1.5 ore)
             val millisecondiTrascorsi = tempoAttuale - sosta.startTimeStamp
 
-            // Allineato al ViewModel: calcolo esatto al minuto
+            // Calcolo proporzionale dei costi con precisione al minuto
             val minutiTrascorsiDouble = millisecondiTrascorsi.toDouble() / (1000.0 * 60.0)
             val costoAlMinuto = sosta.tariffa / 60.0
             val costoAttuale = minutiTrascorsiDouble * costoAlMinuto
 
-            // Formattiamo il costo con 2 decimali (es. "3.50 €")
+            // Formattazione della valuta
             val costoFormattato = String.format("%.2f", costoAttuale)
 
-            // Formattiamo il tempo trascorso in minuti totali per un messaggio più leggibile
+            // Conversione della durata in minuti interi per la visualizzazione nella notifica
             val minutiTrascorsi = (millisecondiTrascorsi / (1000 * 60)).toInt()
 
             val messaggio = "Sosta attiva da $minutiTrascorsi min.\nCosto stimato: $costoFormattato €"
@@ -69,7 +68,8 @@ class ParkingSessionWorker(
             val channel = NotificationChannel(
                 channelId,
                 "Promemoria Soste Attive",
-                NotificationManager.IMPORTANCE_LOW // Low: appare silenziosamente senza far suonare in modo aggressivo
+                // Livello di importanza basso: la notifica appare nel drawer senza interruzioni visive/sonore
+                NotificationManager.IMPORTANCE_LOW
             )
             notificationManager.createNotificationChannel(channel)
         }
@@ -92,7 +92,8 @@ class ParkingSessionWorker(
             .setColor(android.graphics.Color.BLUE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(pendingIntent)
-        // Non usiamo setAutoCancel(true) perché vogliamo che rimanga visibile come promemoria!
+
+        // L'assenza di setAutoCancel mantiene la notifica persistente come promemoria continuo
 
         notificationManager.notify(notificaId, builder.build())
     }

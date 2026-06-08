@@ -10,34 +10,35 @@ import kotlinx.coroutines.launch
 
 class VeicoliViewModel(private val repository: VeicoloRepository) : ViewModel() {
 
-    // Il LiveData per far aggiornare l'interfaccia in automatico
+    // Backing property per l'incapsulamento dello stato: espone un flusso reattivo di sola lettura alla UI
     private val _listaVeicoli = MutableLiveData<List<Veicolo>>()
     val listaVeicoli: LiveData<List<Veicolo>> get() = _listaVeicoli
 
+    // Recupera l'anagrafica dei veicoli dal database delegando l'operazione in modo asincrono
     fun caricaVeicoli() {
-        // viewModelScope.launch fa da ponte: lancia una coroutine!
         viewModelScope.launch {
-            // Qui dentro siamo nel mondo "suspend"
             val dati = repository.ottieniVeicoli()
             _listaVeicoli.value = dati
         }
     }
 
+    // Gestisce la persistenza di un nuovo veicolo e la successiva sincronizzazione dello stato locale
     fun aggiungiVeicolo(nuovoVeicolo: Veicolo) {
         viewModelScope.launch {
             repository.salvaVeicolo(nuovoVeicolo)
-            // Dopo aver salvato, ricarichiamo la lista aggiornata
             caricaVeicoli()
         }
     }
 
+    // Propaga le modifiche anagrafiche al layer dati e aggiorna la View
     fun aggiornaVeicolo(veicoloModificato: Veicolo) {
         viewModelScope.launch {
             repository.aggiornaVeicolo(veicoloModificato)
-            caricaVeicoli() // Ricarica la lista dopo la modifica
+            caricaVeicoli()
         }
     }
 
+    // Rimuove l'entità dal database e richiede un refresh della lista per allineare l'interfaccia
     fun rimuoviVeicolo(id: Long) {
         viewModelScope.launch {
             repository.eliminaVeicolo(id)

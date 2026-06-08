@@ -98,8 +98,7 @@ class HistoryFragment : Fragment() {
         viewModel.storicoParcheggi.observe(viewLifecycleOwner) { resParcheggi ->
             listaCompletaStorico = resParcheggi
 
-            // --- RISOLTO IL BUG DELLO SPINNER ---
-            // Rimuoviamo "[ELIMINATO]" dai nomi nello spinner, così raggruppa tutto correttamente
+            // Normalizza i nomi dei veicoli rimuovendo il tag di eliminazione per evitare duplicati nel menu a tendina
             val veicoliUnici = resParcheggi.map { it.veicoloNome.replace(" [ELIMINATO]", "") }.distinct()
             val opzioniVeicolo = mutableListOf("Tutti i Veicoli")
             opzioniVeicolo.addAll(veicoliUnici)
@@ -130,7 +129,7 @@ class HistoryFragment : Fragment() {
             else -> listaFiltrata
         }
 
-        // --- RISOLTO IL BUG DEL FILTRO ---
+        // Applica il filtro per nome veicolo, garantendo la corrispondenza anche per i veicoli contrassegnati come eliminati
         if (selezioneVeicolo != "Tutti i Veicoli") {
             listaFiltrata = listaFiltrata.filter { it.veicoloNome.replace(" [ELIMINATO]", "") == selezioneVeicolo }
         }
@@ -153,7 +152,6 @@ class HistoryFragment : Fragment() {
                 else -> "🚗"
             }
 
-            // Passiamo l'informazione se è eliminato direttamente nel titolo
             marker.title = if (parcheggio.veicoloNome.contains("[ELIMINATO]")) {
                 "$iconaMezzo $nomeReale [ELIMINATO]"
             } else {
@@ -199,7 +197,7 @@ class HistoryFragment : Fragment() {
 
             binding.mapViewHistory.overlays.add(marker)
 
-            // Geocoding
+            // Risoluzione asincrona delle coordinate in indirizzo stradale (Geocoding inverso)
             viewLifecycleOwner.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 try {
                     val geocoder = android.location.Geocoder(requireContext(), java.util.Locale.getDefault())
@@ -258,9 +256,7 @@ class HistoryFragment : Fragment() {
         _binding = null
     }
 
-    // ---------------------------------------------------------
-    // Classe HistoryInfoWindow: QUI AVVIENE LA MAGIA DEL TESTO ROSSO!
-    // ---------------------------------------------------------
+    // Finestra informativa personalizzata per i marker della mappa
     class HistoryInfoWindow(mapView: org.osmdroid.views.MapView)
         : org.osmdroid.views.overlay.infowindow.MarkerInfoWindow(it.unibo.lam2026.parkmate.R.layout.marker_info_window, mapView) {
 
@@ -271,10 +267,9 @@ class HistoryFragment : Fragment() {
             val txtTitle = mView.findViewById<android.widget.TextView>(it.unibo.lam2026.parkmate.R.id.txtCustomTitle)
             val txtDescription = mView.findViewById<android.widget.TextView>(it.unibo.lam2026.parkmate.R.id.txtCustomDescription)
 
-            // Controlliamo se nel titolo c'è la tag [ELIMINATO]
+            // Evidenzia visivamente nel titolo i veicoli non più presenti nel database
             if (marker.title.contains("[ELIMINATO]")) {
                 val nomePulito = marker.title.replace(" [ELIMINATO]", "")
-                // HTML: Colore Rosso scuro (#D32F2F) e Grassetto (<b>)
                 val htmlTesto = "$nomePulito <br> <font color='#D32F2F'><b>❌ VEICOLO ELIMINATO</b></font>"
                 txtTitle?.text = android.text.Html.fromHtml(htmlTesto)
             } else {

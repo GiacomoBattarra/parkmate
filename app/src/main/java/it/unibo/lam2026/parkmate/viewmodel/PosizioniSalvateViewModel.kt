@@ -11,13 +11,13 @@ import kotlinx.coroutines.launch
 
 class PosizioniSalvateViewModel(application: Application) : AndroidViewModel(application) {
 
-    // 1. Inizializziamo il DAO accedendo al database
+    // Inizializzazione del Data Access Object per la gestione dei luoghi preferiti
     private val dao = AppDatabase.getDatabase(application).posizioneSalvataDao()
 
-    // 2. Prepariamo la lista osservabile che la Mappa potrà "ascoltare".
+    // Flusso reattivo delle posizioni salvate, esposto per l'aggiornamento real-time della View (Mappa)
     val posizioniSalvate = dao.getAllPosizioni().asLiveData()
 
-    // 3. La funzione per salvare una nuova posizione
+    // Persistenza asincrona di un nuovo marcatore spaziale (luogo preferito)
     fun salvaNuovaPosizione(nomeLuogo: String, lat: Double, lng: Double) {
         viewModelScope.launch(Dispatchers.IO) {
             val nuovaPosizione = PosizioneSalvata(
@@ -29,14 +29,14 @@ class PosizioniSalvateViewModel(application: Application) : AndroidViewModel(app
         }
     }
 
-    // --- NUOVO: La funzione per aggiornare una posizione esistente ---
+    // Aggiornamento dei metadati o delle coordinate di una posizione preesistente
     fun aggiornaPosizione(posizione: PosizioneSalvata) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.updatePosizione(posizione)
         }
     }
 
-    // 4. La funzione per eliminare una posizione
+    // Rimozione permanente di una posizione salvata dal database locale
     fun eliminaPosizione(posizione: PosizioneSalvata) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.deletePosizione(posizione)

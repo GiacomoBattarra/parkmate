@@ -8,13 +8,15 @@ import androidx.recyclerview.widget.RecyclerView
 import it.unibo.lam2026.parkmate.R
 import it.unibo.lam2026.parkmate.model.SessioneParcheggio
 
+// Adapter responsabile del rendering delle singole sessioni di parcheggio all'interno della RecyclerView
 class ParcheggiAdapter(private val lista: List<SessioneParcheggio>) :
     RecyclerView.Adapter<ParcheggiAdapter.ParcheggioViewHolder>() {
 
     class ParcheggioViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val nome: TextView = view.findViewById(R.id.textNomeParcheggio)
         val tipo: TextView = view.findViewById(R.id.textTipoParcheggio)
-        // Aggiungi qui gli altri campi (es. tariffa, posti)
+
+        // Punto di estensione per la mappatura di futuri attributi visivi (es. tariffa oraria, posti disponibili)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ParcheggioViewHolder {

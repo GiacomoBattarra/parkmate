@@ -5,28 +5,29 @@ import kotlinx.coroutines.withContext
 
 class VeicoloRepository(private val dao: VeicoloDao) {
 
+    // Recupera l'elenco dei veicoli delegando l'operazione al thread I/O
     suspend fun ottieniVeicoli(): List<Veicolo> {
-        // Sposta il lavoro su un thread sicuro in background[cite: 2]
         return withContext(Dispatchers.IO) {
             dao.getTuttiIVeicoli()
         }
     }
 
+    // Salva un nuovo veicolo nel database
     suspend fun salvaVeicolo(veicolo: Veicolo) {
-        // Forza l'inserimento sul thread sicuro[cite: 2]
         withContext(Dispatchers.IO) {
             dao.inserisciVeicolo(veicolo)
         }
     }
 
+    // Sovrascrive i dati di un veicolo precedentemente salvato
     suspend fun aggiornaVeicolo(veicolo: Veicolo) {
         withContext(Dispatchers.IO) {
             dao.aggiornaVeicolo(veicolo)
         }
     }
 
+    // Rimuove permanentemente un veicolo dal database
     suspend fun eliminaVeicolo(veicoloId: Long) {
-        // Forza l'eliminazione sul thread sicuro[cite: 2]
         withContext(Dispatchers.IO) {
             dao.eliminaVeicolo(veicoloId)
         }

@@ -41,15 +41,15 @@ class MapFragment : Fragment() {
     private val binding get() = _binding!!
     private lateinit var myLocationOverlay: MyLocationNewOverlay
 
-    // Variabili per capire in che "modalità" ci troviamo
+    // Gestione dello stato dell'interfaccia utente
     private var isSelectingLocation = false
     private var isSelectingFavorite = false
 
-    // Variabili per la modifica
+    // Gestione dello stato di modifica per le posizioni salvate
     private var isEditingFavorite = false
     private var locationBeingEdited: PosizioneSalvata? = null
 
-    // Memoria per sapere se la mappa è pulita (invisibile) o normale
+    // Flag per la modalità "Mappa Pulita" (Zen Mode)
     private var isMappaPulita = false
 
     private lateinit var viewModel: MainViewModel
@@ -87,9 +87,7 @@ class MapFragment : Fragment() {
         setupMap()
         checkLocationPermissions()
 
-        // ---------------------------------------------------------
-        // 1. DISEGNO DEI PARCHEGGI ATTIVI SULLA MAPPA
-        // ---------------------------------------------------------
+        // Rendering e monitoraggio dei parcheggi attualmente attivi
         viewModel.listaParcheggi.observe(viewLifecycleOwner) { lista ->
             binding.mapView.overlays.removeAll { it is org.osmdroid.views.overlay.Marker && it.id == "PARCHEGGIO" }
 
@@ -102,7 +100,6 @@ class MapFragment : Fragment() {
                     segnaposto.id = "PARCHEGGIO"
                     segnaposto.position = org.osmdroid.util.GeoPoint(parcheggio.latitudine, parcheggio.longitudine)
 
-                    // --- NUOVO: Scelta dinamica dell'emoji in base al tipo di veicolo ---
                     val iconaMezzo = when {
                         parcheggio.veicoloNome.contains("Moto", ignoreCase = true) -> "🏍️"
                         parcheggio.veicoloNome.contains("Bici", ignoreCase = true) -> "🚲"
@@ -110,7 +107,7 @@ class MapFragment : Fragment() {
                     }
                     segnaposto.title = "$iconaMezzo ${parcheggio.veicoloNome}"
 
-                    // CALCOLO TEMPO E COSTI IN TEMPO REALE
+                    // Calcolo dinamico di tempistiche e costi basato sulle tariffe
                     val formattaData = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
                     val oraInizio = formattaData.format(java.util.Date(parcheggio.startTimeStamp))
 
@@ -131,20 +128,17 @@ class MapFragment : Fragment() {
                         }
                     }
 
-                    // Creiamo il testo compatto con tutte le info
                     val infoDettagliate = "${parcheggio.tipoParcheggio}\n🕒 Inizio: $oraInizio | ⏳ Trascorso: $tempoTrascorso\n💰 Costo Attuale: $costoTesto"
-
-                    // Assegnamo temporaneamente il testo
                     segnaposto.snippet = infoDettagliate
 
-                    // Se la mappa è attualmente "pulita", rendiamo il nuovo marker subito trasparente
+                    // Mantiene la coerenza visiva se la modalità "Mappa Pulita" è attiva
                     if (isMappaPulita) segnaposto.setAlpha(0.0f)
 
                     segnaposto.relatedObject = parcheggio.id
                     segnaposto.infoWindow = ParkInfoWindow(binding.mapView) { idSessione ->
                         viewModel.terminaParcheggio(idSessione)
 
-                        // Ferma il tracciamento camminata se l'utente spegne tutto prima di fermarsi
+                        // Interrompe il tracciamento pedonale in caso di terminazione manuale
                         val stopIntent = android.content.Intent(requireContext(), PedestrianTrackingService::class.java).apply {
                             action = "STOP_TRACKING"
                         }
@@ -154,7 +148,6 @@ class MapFragment : Fragment() {
                     }
 
                     segnaposto.setOnMarkerClickListener { marker, mapView ->
-                        // Blocca i click fantasma se la mappa è pulita
                         if (isMappaPulita) return@setOnMarkerClickListener true
 
                         if (marker.isInfoWindowOpen) marker.closeInfoWindow()
@@ -165,6 +158,7 @@ class MapFragment : Fragment() {
                         true
                     }
 
+                    // Risoluzione asincrona delle coordinate in indirizzo
                     viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                         try {
                             val geocoder = Geocoder(requireContext(), Locale.getDefault())
@@ -209,9 +203,7 @@ class MapFragment : Fragment() {
             binding.mapView.invalidate()
         }
 
-        // ---------------------------------------------------------
-        // 2. DISEGNO DEI LUOGHI PREFERITI E GESTIONE BOTTONI MATITA/CESTINO
-        // ---------------------------------------------------------
+        // Gestione rendering e interazioni per i luoghi preferiti
         val posizioniAdapter = PosizioniSalvateAdapter(
             posizioni = emptyList(),
 
@@ -263,14 +255,11 @@ class MapFragment : Fragment() {
             for (posizione in listaAggiornata) {
                 val markerCuore = org.osmdroid.views.overlay.Marker(binding.mapView)
 
-                // 0.5f = Centro esatto in orizzontale.
-                // 0.9f = Punta a 90% dell'altezza verso il basso (ignora l'ultimo 10% di spazio vuoto).
                 markerCuore.setAnchor(1f, 1f)
 
                 markerCuore.id = "PREFERITO"
                 markerCuore.position = org.osmdroid.util.GeoPoint(posizione.latitudine, posizione.longitudine)
 
-                // Impostiamo il titolo e un testo di ricerca temporaneo
                 markerCuore.title = posizione.nome
                 markerCuore.snippet = "📍 Ricerca indirizzo in corso..."
 
@@ -278,13 +267,11 @@ class MapFragment : Fragment() {
                 icona?.setTint(android.graphics.Color.RED)
                 markerCuore.icon = icona
 
-                // Se la mappa è attualmente "pulita", rendiamo il cuore subito trasparente
                 if (isMappaPulita) markerCuore.setAlpha(0.0f)
 
                 markerCuore.setAnchor(org.osmdroid.views.overlay.Marker.ANCHOR_CENTER, org.osmdroid.views.overlay.Marker.ANCHOR_BOTTOM)
 
                 markerCuore.setOnMarkerClickListener { marker, _ ->
-                    // Blocca i click fantasma se la mappa è pulita
                     if (isMappaPulita) return@setOnMarkerClickListener true
 
                     if (marker.isInfoWindowOpen) marker.closeInfoWindow() else marker.showInfoWindow()
@@ -293,7 +280,7 @@ class MapFragment : Fragment() {
 
                 binding.mapView.overlays.add(markerCuore)
 
-                // --- MAGIA: CHIAMIAMO IL GEOCODER IN BACKGROUND PER I PREFERITI ---
+                // Geocoding in background per l'etichetta del preferito
                 viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                     try {
                         val geocoder = Geocoder(requireContext(), Locale.getDefault())
@@ -314,18 +301,15 @@ class MapFragment : Fragment() {
                             "Indirizzo non trovato"
                         }
 
-                        // Torniamo sul Thread principale per aggiornare il fumetto
                         withContext(Dispatchers.Main) {
                             markerCuore.snippet = "📍 $indirizzoPulito"
 
-                            // Se l'utente ha il fumetto aperto proprio ora, lo "riavviamo" per mostrare la via
                             if (markerCuore.isInfoWindowOpen) {
                                 markerCuore.closeInfoWindow()
                                 markerCuore.showInfoWindow()
                             }
                         }
                     } catch (e: Exception) {
-                        // Fallback se l'emulatore è offline
                         withContext(Dispatchers.Main) {
                             val latCorta = String.format(Locale.getDefault(), "%.4f", posizione.latitudine)
                             val lonCorta = String.format(Locale.getDefault(), "%.4f", posizione.longitudine)
@@ -342,7 +326,7 @@ class MapFragment : Fragment() {
             binding.mapView.invalidate()
         }
 
-        // 3. BOTTONE "PARCHEGGIA QUI"
+        // Flusso di selezione manuale del parcheggio sulla mappa
         binding.btnParkHere.setOnClickListener {
             if (isSelectingFavorite || isEditingFavorite) return@setOnClickListener
 
@@ -367,7 +351,7 @@ class MapFragment : Fragment() {
             }
         }
 
-        // 4. MENU A TENDINA
+        // Gestione espansione del menu dei luoghi salvati
         var isListExpanded = false
         binding.headerLuoghiSalvati.setOnClickListener {
             isListExpanded = !isListExpanded
@@ -380,11 +364,11 @@ class MapFragment : Fragment() {
             }
         }
 
-        // 5. BOTTONE "+" AGGIUNGI / CONFERMA MODIFICA PREFERITO
+        // Flusso di aggiunta/modifica di una posizione preferita
         binding.fabAggiungiPosizione.setOnClickListener {
             if (isSelectingLocation) return@setOnClickListener
 
-            // --- FASE DI CONFERMA MODIFICA (Matita) ---
+            // Fase di conferma modifica
             if (isEditingFavorite) {
                 val currentGeoPoint = binding.mapView.mapCenter as GeoPoint
                 isEditingFavorite = false
@@ -421,7 +405,7 @@ class MapFragment : Fragment() {
                 return@setOnClickListener
             }
 
-            // --- FASE DI AGGIUNTA NUOVO LUOGO (+) ---
+            // Fase di aggiunta nuovo preferito
             if (!isSelectingFavorite) {
                 isSelectingFavorite = true
                 binding.imgCenterPin.visibility = View.VISIBLE
@@ -459,9 +443,7 @@ class MapFragment : Fragment() {
             }
         }
 
-        // ---------------------------------------------------------
-        // 6. BOTTONE "X" PER PULIRE LA MAPPA (Modalità Zen)
-        // ---------------------------------------------------------
+        // Toggle per la "Mappa Pulita" (Zen Mode) che nasconde momentaneamente i marker
         binding.btnTerminaSosta.setOnClickListener {
             isMappaPulita = !isMappaPulita
 
@@ -501,20 +483,18 @@ class MapFragment : Fragment() {
         binding.mapView.minZoomLevel = 3.0
         binding.mapView.setMultiTouchControls(true)
 
-        // --- NUOVO: Ascoltatore di click sulla mappa per chiudere i popup ---
+        // Event listener per gestire la chiusura delle info window tramite touch sulla mappa
         val ricevitoreClickMappa = object : org.osmdroid.events.MapEventsReceiver {
             override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
-                // Quando l'utente tocca un punto vuoto della mappa, chiudiamo tutti i fumetti aperti!
                 org.osmdroid.views.overlay.infowindow.InfoWindow.closeAllInfoWindowsOn(binding.mapView)
-                return false // Restituiamo 'false' per permettere alla mappa di continuare a muoversi
+                return false
             }
 
             override fun longPressHelper(p: GeoPoint?): Boolean {
-                return false // Non facciamo nulla con la pressione prolungata
+                return false
             }
         }
 
-        // Aggiungiamo l'ascoltatore alla mappa!
         val mapEventsOverlay = org.osmdroid.views.overlay.MapEventsOverlay(ricevitoreClickMappa)
         binding.mapView.overlays.add(mapEventsOverlay)
     }
@@ -544,9 +524,7 @@ class MapFragment : Fragment() {
     }
 }
 
-// ---------------------------------------------------------
-// Classe ParkInfoWindow
-// ---------------------------------------------------------
+// Controller personalizzato per il popup (InfoWindow) associato al marker del parcheggio
 class ParkInfoWindow(mapView: org.osmdroid.views.MapView, private val onTerminaClick: (Long) -> Unit)
     : org.osmdroid.views.overlay.infowindow.MarkerInfoWindow(R.layout.marker_info_window, mapView) {
 

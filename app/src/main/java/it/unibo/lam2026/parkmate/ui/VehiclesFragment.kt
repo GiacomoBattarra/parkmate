@@ -8,7 +8,7 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.lifecycleScope // <-- IMPORT AGGIUNTO PER RISOLVERE L'ERRORE
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import it.unibo.lam2026.parkmate.R
 import it.unibo.lam2026.parkmate.databinding.FragmentVehiclesBinding
@@ -17,9 +17,9 @@ import it.unibo.lam2026.parkmate.model.VeicoloRepository
 import it.unibo.lam2026.parkmate.viewmodel.ParcheggioViewModel
 import it.unibo.lam2026.parkmate.viewmodel.VeicoliViewModel
 import it.unibo.lam2026.parkmate.viewmodel.VeicoliViewModelFactory
-import kotlinx.coroutines.Dispatchers // <-- IMPORT AGGIUNTO
-import kotlinx.coroutines.launch // <-- IMPORT AGGIUNTO
-import kotlinx.coroutines.withContext // <-- IMPORT AGGIUNTO
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class VehiclesFragment : Fragment() {
 
@@ -77,7 +77,7 @@ class VehiclesFragment : Fragment() {
         viewModel.caricaVeicoli()
     }
 
-    // --- Pop-up di Conferma Eliminazione Intelligente ---
+    // Flusso di conferma per l'eliminazione del veicolo, con gestione a cascata delle soste attive e storicizzazione
     private fun mostraDialogEliminazione(veicolo: it.unibo.lam2026.parkmate.model.Veicolo) {
         com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
             .setTitle("Elimina Veicolo")
@@ -92,7 +92,7 @@ class VehiclesFragment : Fragment() {
             .show()
     }
 
-    // --- Pop-up Dettagli Sosta cliccando la P (Con Indirizzo!) ---
+    // Recupero e presentazione dei dettagli spaziali e temporali relativi a una sessione di parcheggio in corso
     private fun mostraDettagliSosta(veicolo: it.unibo.lam2026.parkmate.model.Veicolo) {
         val parcheggiInCorso = parcheggioViewModel.parcheggiAttivi.value ?: return
         val nomeNelDatabase = "${veicolo.nome} (${veicolo.tipo})"
@@ -102,7 +102,7 @@ class VehiclesFragment : Fragment() {
             val formattaData = java.text.SimpleDateFormat("dd/MM/yyyy - HH:mm", java.util.Locale.getDefault())
             val data = formattaData.format(java.util.Date(sosta.startTimeStamp))
 
-            // Lanciamo il Geocoder in background
+            // Risoluzione asincrona delle coordinate in indirizzo fisico (Reverse Geocoding)
             viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                 var indirizzoTesto = ""
                 try {
@@ -131,7 +131,7 @@ class VehiclesFragment : Fragment() {
                     indirizzoTesto = "Non riesco a caricare l'indirizzo\nCoord: $latCorta, $lonCorta"
                 }
 
-                // Torniamo sul Thread principale per mostrare il pop-up
+                // Sincronizzazione sul Main Thread per il rendering del dialog con le informazioni geografiche
                 withContext(Dispatchers.Main) {
                     com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
                         .setTitle("🅿️ Sosta in corso")

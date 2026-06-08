@@ -10,31 +10,27 @@ import kotlinx.coroutines.launch
 
 class MainViewModel(private val repository: ParcheggioRepository) : ViewModel() {
 
-    // 1. La lista reattiva per la mappa
+    // Flusso reattivo contenente le sessioni di parcheggio attualmente attive, esposto per il rendering in UI (Mappa)
     val listaParcheggi = repository.parcheggiAttivi.asLiveData()
 
-    // ------------------------------------------------------------------------
-    // [NUOVA FUNZIONE] DA USARE QUANDO SALVI UN NUOVO PARCHEGGIO DAL BOTTOM SHEET
-    // ------------------------------------------------------------------------
+    // Gestisce l'avvio di una nuova sessione di parcheggio, risolvendo eventuali conflitti con soste precedenti
     fun avviaNuovoParcheggio(nuovaSessione: SessioneParcheggio) {
         viewModelScope.launch(Dispatchers.IO) {
 
-            // 1. Controlliamo se questa macchina è già parcheggiata da qualche altra parte
+            // Verifica la presenza di una sessione attiva pregressa per il medesimo veicolo
             val vecchiaSessione = repository.getParcheggioAttivoPerVeicolo(nuovaSessione.veicoloNome)
 
-            // 2. Se sì, la chiudiamo in automatico salvando la tariffa!
+            // Terminazione automatica e storicizzazione della sessione pregressa in caso di conflitto
             if (vecchiaSessione != null) {
                 terminaParcheggioSincrono(vecchiaSessione)
             }
 
-            // 3. Ora che la vecchia sosta è chiusa, inseriamo quella nuova pulita
+            // Persistenza della nuova sessione di sosta
             repository.inserisciParcheggio(nuovaSessione)
         }
     }
 
-    // ------------------------------------------------------------------------
-    // FUNZIONE STANDARD (Chiamata quando premi "Termina Sosta" sulla mappa)
-    // ------------------------------------------------------------------------
+    // Interrompe manualmente una sosta in corso recuperandone lo stato dal database
     fun terminaParcheggio(sessionId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             val sessione = repository.getParcheggioById(sessionId)
@@ -44,9 +40,7 @@ class MainViewModel(private val repository: ParcheggioRepository) : ViewModel() 
         }
     }
 
-    // ------------------------------------------------------------------------
-// LOGICA MATEMATICA (Usata da entrambe le funzioni qui sopra per non ripetere codice)
-// ------------------------------------------------------------------------
+    // Calcolo della tariffa e terminazione sincrona della sessione per garantire coerenza dei dati
     private suspend fun terminaParcheggioSincrono(sessione: SessioneParcheggio) {
         val tempoAttuale = System.currentTimeMillis()
         var costoCalcolato = 0.0
@@ -55,28 +49,24 @@ class MainViewModel(private val repository: ParcheggioRepository) : ViewModel() 
             if (sessione.tipoParcheggio.contains("Fiss", ignoreCase = true)) {
                 costoCalcolato = sessione.tariffa
             } else {
-                // --- NUOVA MATEMATICA AL MINUTO ---
+                // Calcolo proporzionale della tariffazione basato sui minuti effettivi di permanenza
                 val millisecondiTrascorsi = tempoAttuale - sessione.startTimeStamp
 
-                // 1. Calcoliamo i minuti esatti con i decimali
                 val minutiTrascorsi = millisecondiTrascorsi.toDouble() / (1000.0 * 60.0)
-
-                // 2. Troviamo il costo per singolo minuto
                 val costoAlMinuto = sessione.tariffa / 60.0
 
-                // 3. Moltiplichiamo per ottenere il costo esatto
                 costoCalcolato = minutiTrascorsi * costoAlMinuto
 
-                // Arrotondamento ai centesimi (es. 1.45€)
+                // Arrotondamento ai due decimali (centesimi di Euro)
                 costoCalcolato = Math.round(costoCalcolato * 100.0) / 100.0
             }
         }
 
-        // Salviamo nel DB!
+        // Consolidamento della chiusura su database
         repository.chiudiParcheggio(sessione.id, tempoAttuale, costoCalcolato)
     }
 
-    // (La tua funzione di test)
+    // Metodo di utility per popolare l'ambiente con dati mock a scopo di test e dimostrazione
     fun aggiungiParcheggioDiTest() {
         viewModelScope.launch(Dispatchers.IO) {
             val nuovo = SessioneParcheggio(
@@ -87,7 +77,7 @@ class MainViewModel(private val repository: ParcheggioRepository) : ViewModel() 
                 startTimeStamp = System.currentTimeMillis(),
                 parkingEffortScore = 3
             )
-            avviaNuovoParcheggio(nuovo) // Usiamo la nuova funzione anche qui!
+            avviaNuovoParcheggio(nuovo)
         }
     }
 }

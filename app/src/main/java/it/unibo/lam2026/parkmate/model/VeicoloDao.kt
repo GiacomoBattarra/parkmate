@@ -9,19 +9,18 @@ import androidx.room.Update
 @Dao
 interface VeicoloDao {
 
-    // Ottenere tutti i veicoli per mostrarli nella lista
+    // Recupera l'elenco di tutti i veicoli registrati per popolare l'interfaccia utente
     @Query("SELECT * FROM tabella_veicoli")
     fun getTuttiIVeicoli(): List<Veicolo>
 
-    // Salvare un nuovo veicolo
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun inserisciVeicolo(veicolo: Veicolo)
 
-    // Eliminare un veicolo (richiesto dalle specifiche del progetto!)
+    // Rimuove permanentemente il veicolo dal database
     @Query("DELETE FROM tabella_veicoli WHERE id = :veicoloId")
     fun eliminaVeicolo(veicoloId: Long)
 
-    // Indica a Room di cercare la riga con lo stesso ID e aggiornarne i campi
+    // Aggiorna i dati di un veicolo esistente
     @Update
     fun aggiornaVeicolo(veicolo: Veicolo)
 }

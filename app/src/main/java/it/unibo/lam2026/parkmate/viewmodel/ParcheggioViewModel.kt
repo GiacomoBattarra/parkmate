@@ -40,7 +40,7 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
     ) {
         val tempoAttuale = System.currentTimeMillis()
 
-        // [NUOVO] Calcoliamo il Parking Effort Score prima di creare la sessione
+        // Calcolo del Parking Effort Score per la telemetria della sosta
         val scoreCalcolato = calcolaAndResetParkingEffortScore(tempoAttuale)
 
         val nuovaSessione = SessioneParcheggio(
@@ -53,47 +53,41 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
             scadenzaTimestamp = scadenzaTimestamp,
             nota = nota,
             fotoPath = fotoPath,
-            parkingEffortScore = scoreCalcolato // [NUOVO] Passiamo il punteggio alla colonna del DB!
+            parkingEffortScore = scoreCalcolato
         )
 
-        //Cancella eventuali worker residui per questo veicolo (evita duplicati)
+        // Deregistrazione di eventuali job pendenti per evitare sovrapposizioni di notifiche
         WorkManager.getInstance(getApplication()).cancelAllWorkByTag("SESSION_$nomeVeicolo")
 
-        // GESTIONE DOPPIONI E SALVATAGGIO IN BACKGROUND
+        // Esecuzione asincrona per la gestione dei conflitti e persistenza della sessione
         viewModelScope.launch(Dispatchers.IO) {
 
-            // A. Cerchiamo se la macchina è già parcheggiata altrove
+            // Risoluzione dei conflitti: individuazione di eventuali sessioni attive per il medesimo veicolo
             val vecchiaSessione = dao.getParcheggioAttivoPerVeicolo(nomeVeicolo)
 
-            // B. Se sì, la chiudiamo in automatico per tutti i casi (Gratis, Fisso, Orario)
+            // Terminazione automatica della sessione pregressa e calcolo degli oneri maturati
             if (vecchiaSessione != null) {
                 var costoCalcolato = 0.0
 
-                // Calcolo solo se c'è una tariffa (Fissa od Oraria)
                 if (vecchiaSessione.tariffa > 0.0) {
                     if (vecchiaSessione.tipoParcheggio.contains("Fiss", ignoreCase = true)) {
                         costoCalcolato = vecchiaSessione.tariffa
                     } else {
+                        // Calcolo proporzionale della tariffa basato sui minuti effettivi di sosta
                         val millisecondiTrascorsi = tempoAttuale - vecchiaSessione.startTimeStamp
-
-                        // 1. Troviamo i minuti esatti (con i decimali)
                         val minutiTrascorsi = millisecondiTrascorsi.toDouble() / (1000.0 * 60.0)
-
-                        // 2. Calcoliamo quanto costa 1 singolo minuto
                         val costoAlMinuto = vecchiaSessione.tariffa / 60.0
 
-                        // 3. Moltiplichiamo i minuti per il costo al minuto
                         costoCalcolato = minutiTrascorsi * costoAlMinuto
 
-                        // Arrotondiamo ai classici 2 decimali (es. 1.45€)
+                        // Arrotondamento ai centesimi di Euro
                         costoCalcolato = Math.round(costoCalcolato * 100.0) / 100.0
                     }
                 }
 
-                // Chiudiamo il vecchio parcheggio nel database
                 dao.chiudiParcheggio(vecchiaSessione.id, tempoAttuale, costoCalcolato)
 
-                // MOSTRA L'AVVISO ALL'UTENTE
+                // Feedback UI per notificare all'utente la risoluzione del conflitto
                 withContext(Dispatchers.Main) {
                     Toast.makeText(
                         getApplication(),
@@ -103,16 +97,15 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
                 }
             }
 
-            // C. Salviamo la nuova sosta
+            // Persistenza della nuova sessione
             dao.inserisciParcheggio(nuovaSessione)
         }
 
-        // Impostiamo l'allarme se c'è una scadenza
         if (scadenzaTimestamp != null) {
             impostaAllarmeScadenza(nomeVeicolo, scadenzaTimestamp)
         }
 
-        // Avviamo il worker se è a pagamento orario
+        // Schedulazione del job periodico per l'aggiornamento della spesa nelle soste orarie
         if (tipo.contains("Orario")) {
             val workRequest = PeriodicWorkRequestBuilder<ParkingSessionWorker>(1, TimeUnit.HOURS)
                 .addTag("SESSION_${nuovaSessione.veicoloNome}")
@@ -122,34 +115,31 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    // [NUOVO] Funzione di supporto per l'algoritmo del Parking Effort Score
+    // Valutazione dello sforzo di parcheggio basata sull'integrazione con Activity Recognition
     private fun calcolaAndResetParkingEffortScore(tempoAttuale: Long): Int? {
-        // Accediamo alle SharedPreferences in modo sicuro tramite il contesto dell'applicazione
         val sharedPrefs = getApplication<Application>().getSharedPreferences("ParkMatePrefs", Context.MODE_PRIVATE)
 
-        // Leggiamo il timestamp della discesa. Se non c'è, restituisce 0L (significa parcheggio manuale)
+        // Recupero del timestamp generato al rilevamento dell'uscita dal veicolo
         val timestampDiscesa = sharedPrefs.getLong("KEY_DISCESA_AUTO_TIMESTAMP", 0L)
 
+        // Fallback: se assente, la sosta è stata inizializzata manualmente
         if (timestampDiscesa == 0L) {
-            // L'utente ha avviato il parcheggio a mano senza passare dall'Activity Recognition
             return null
         }
 
-        // Calcoliamo la differenza in millisecondi e la convertiamo in minuti
         val deltaMs = tempoAttuale - timestampDiscesa
         val minutiTrascorsi = deltaMs / (1000 * 60)
 
-        // Applichiamo la scala di valutazione concordata (da 1 a 5)
+        // Classificazione del Parking Effort Score (Scala 1-5)
         val score = when {
-            minutiTrascorsi < 2 -> 1   // Sosta quasi immediata (Faticosità: Minima)
-            minutiTrascorsi < 5 -> 2   // Qualche minuto di ricerca (Faticosità: Bassa)
-            minutiTrascorsi < 10 -> 3  // Sforzo normale urbano (Faticosità: Media)
-            minutiTrascorsi < 20 -> 4  // Ha girato molto o parcheggiato lontano (Faticosità: Alta)
-            else -> 5                  // Oltre 20 minuti a piedi/ricerca (Faticosità: Critica)
+            minutiTrascorsi < 2 -> 1
+            minutiTrascorsi < 5 -> 2
+            minutiTrascorsi < 10 -> 3
+            minutiTrascorsi < 20 -> 4
+            else -> 5
         }
 
-        // CRUCIALE: Puliamo subito la preferenza!
-        // Altrimenti il prossimo parcheggio manuale riutilizzerebbe questo vecchio dato.
+        // Reset del flag per prevenire l'inquinamento dei dati in future sessioni manuali
         sharedPrefs.edit().remove("KEY_DISCESA_AUTO_TIMESTAMP").apply()
 
         return score
@@ -173,6 +163,7 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Schedulazione dell'allarme con anticipo di 10 minuti rispetto alla scadenza reale
         val dieciMinutiMs = 10 * 60 * 1000
         var tempoSveglia = scadenzaTimestamp - dieciMinutiMs
 
@@ -203,17 +194,15 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
                     if (sessione.tipoParcheggio.contains("Fiss", ignoreCase = true)) {
                         costoCalcolato = sessione.tariffa
                     } else {
-                        // LA NOSTRA NUOVA MATEMATICA AL MINUTO
                         val millisecondiTrascorsi = tempoDiFine - sessione.startTimeStamp
                         val minutiTrascorsi = millisecondiTrascorsi.toDouble() / (1000.0 * 60.0)
                         val costoAlMinuto = sessione.tariffa / 60.0
 
                         costoCalcolato = minutiTrascorsi * costoAlMinuto
-
-                        // Arrotondamento ai centesimi
                         costoCalcolato = Math.round(costoCalcolato * 100.0) / 100.0
                     }
                 }
+
                 dao.chiudiParcheggio(sessionId, tempoDiFine, costoCalcolato)
                 WorkManager.getInstance(getApplication()).cancelAllWorkByTag("SESSION_${sessione.veicoloNome}")
             }
@@ -226,15 +215,14 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    // Gestione intelligente dell'eliminazione del veicolo
+    // Gestione della referenzialità dei dati storici a seguito dell'eliminazione logica di un veicolo
     fun gestisciEliminazioneVeicolo(nomeVeicolo: String) {
         viewModelScope.launch(Dispatchers.IO) {
 
-            // 1. Controlliamo se c'è un parcheggio attualmente in corso
             val sostaInCorso = dao.getParcheggioAttivoPerVeicolo(nomeVeicolo)
 
+            // Chiusura forzata della sessione attiva per garantirne la storicizzazione prima della rimozione del veicolo
             if (sostaInCorso != null) {
-                // Invece di cancellarlo, LO TERMINIAMO FORZATAMENTE!
                 val tempoDiFine = System.currentTimeMillis()
                 var costoCalcolato = 0.0
 
@@ -248,14 +236,11 @@ class ParcheggioViewModel(application: Application) : AndroidViewModel(applicati
                     }
                 }
 
-                // Chiudiamo il parcheggio nel database (così finisce nello storico)
                 dao.chiudiParcheggio(sostaInCorso.id, tempoDiFine, costoCalcolato)
             }
 
-            // 2. Usiamo una tag speciale e nascosta [ELIMINATO]
+            // Etichettatura batch dei record storici associati per preservare l'integrità visiva dello storico
             val nuovoNome = "$nomeVeicolo [ELIMINATO]"
-
-            // 3. Adesso che TUTTI i parcheggi di quell'auto sono nello storico, li etichettiamo in blocco!
             dao.aggiornaNomeVeicoloNelloStorico(vecchioNome = nomeVeicolo, nuovoNome = nuovoNome)
         }
     }

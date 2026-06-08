@@ -8,17 +8,18 @@ import androidx.recyclerview.widget.RecyclerView
 import it.unibo.lam2026.parkmate.R
 import it.unibo.lam2026.parkmate.model.PosizioneSalvata
 
+// Adapter per la gestione e visualizzazione dei luoghi preferiti salvati dall'utente
 class PosizioniSalvateAdapter(
     private var posizioni: List<PosizioneSalvata>,
     private val onPosizioneClick: (PosizioneSalvata) -> Unit,
-    private val onEditClick: (PosizioneSalvata) -> Unit,    // <--- NUOVO: Per la matita
-    private val onDeleteClick: (PosizioneSalvata) -> Unit   // <--- Per il cestino
+    private val onEditClick: (PosizioneSalvata) -> Unit,
+    private val onDeleteClick: (PosizioneSalvata) -> Unit
 ) : RecyclerView.Adapter<PosizioniSalvateAdapter.ViewHolder>() {
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val textNome: TextView = view.findViewById(R.id.text_nome_posizione)
-        val btnModifica: TextView = view.findViewById(R.id.btn_modifica_posizione) // <--- MATITA
-        val btnElimina: TextView = view.findViewById(R.id.btn_elimina_posizione)   // <--- CESTINO
+        val btnModifica: TextView = view.findViewById(R.id.btn_modifica_posizione)
+        val btnElimina: TextView = view.findViewById(R.id.btn_elimina_posizione)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -32,13 +33,9 @@ class PosizioniSalvateAdapter(
 
         holder.textNome.text = posizione.nome
 
-        // 1. Cliccando il nome, la mappa si sposta
+        // Gestione degli eventi di interazione (selezione, modifica, eliminazione) sull'elemento della lista
         holder.textNome.setOnClickListener { onPosizioneClick(posizione) }
-
-        // 2. Cliccando la matita, parte la modifica
         holder.btnModifica.setOnClickListener { onEditClick(posizione) }
-
-        // 3. Cliccando il cestino, lo elimina
         holder.btnElimina.setOnClickListener { onDeleteClick(posizione) }
     }
 
